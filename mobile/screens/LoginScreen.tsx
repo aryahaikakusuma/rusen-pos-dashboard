@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -26,6 +27,7 @@ import {
  */
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { height } = useWindowDimensions();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,85 +68,131 @@ export default function LoginScreen() {
 
   const pinFull = pin.length === PIN_LENGTH;
 
+  // Aplikasi dikunci landscape karena targetnya tablet kasir. Di tablet, tinggi
+  // landscape masih cukup untuk menumpuk semuanya. Di ponsel tidak — tombol
+  // "Masuk" terdorong keluar layar dan PIN tidak bisa dikonfirmasi. Jadi pada
+  // viewport pendek, isinya dipecah jadi dua kolom: keypad di kanan, sisanya di
+  // kiri. Ambangnya soal tinggi, bukan jenis perangkat.
+  const compact = height < 520;
+
+  const dots = (
+    <View style={[styles.dotRow, compact && styles.dotRowCompact]}>
+      {Array.from({ length: PIN_LENGTH }, (_, index) => {
+        const filled = pin.length > index;
+        return (
+          <View
+            key={index}
+            style={[
+              styles.dotSlot,
+              compact && styles.dotSlotCompact,
+              filled && styles.dotSlotFilled,
+            ]}>
+            <View style={[styles.dot, filled && styles.dotFilled]} />
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  const keypad = (
+    <View style={styles.keypad}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+        <Key
+          key={digit}
+          label={String(digit)}
+          compact={compact}
+          onPress={() => appendDigit(String(digit))}
+          disabled={loading || pinFull}
+        />
+      ))}
+
+      <Key
+        label="Hapus"
+        muted
+        compact={compact}
+        onPress={clear}
+        disabled={loading || !pin}
+      />
+      <Key
+        label="0"
+        compact={compact}
+        onPress={() => appendDigit("0")}
+        disabled={loading || pinFull}
+      />
+      <Key
+        label="⌫"
+        accessibilityLabel="Hapus satu digit"
+        compact={compact}
+        onPress={backspace}
+        disabled={loading || !pin}
+      />
+    </View>
+  );
+
+  const submitButton = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={submit}
+      disabled={loading || !pinFull}
+      style={({ pressed }) => [
+        styles.submit,
+        compact && styles.submitCompact,
+        (loading || !pinFull) && styles.submitDisabled,
+        pressed && styles.submitPressed,
+      ]}>
+      {loading ? (
+        <View style={styles.submitLoading}>
+          <ActivityIndicator color={colors.neutral[0]} />
+          <Text style={styles.submitLabel}>Memeriksa PIN</Text>
+        </View>
+      ) : (
+        <Text
+          style={[styles.submitLabel, !pinFull && styles.submitLabelDisabled]}>
+          Masuk
+        </Text>
+      )}
+    </Pressable>
+  );
+
+  const errorSlot = (
+    <View style={[styles.errorSlot, compact && styles.errorSlotCompact]}>
+      {error ? (
+        <Text style={styles.errorText} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+
   return (
-    <View style={styles.screen}>
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <Text style={styles.brand}>Rusen Kopitiam</Text>
-          <Text style={styles.tagline}>Point of Sale System</Text>
-        </View>
-
-        <Text style={styles.prompt}>Masukkan PIN {PIN_LENGTH} digit</Text>
-
-        <View style={styles.dotRow}>
-          {Array.from({ length: PIN_LENGTH }, (_, index) => {
-            const filled = pin.length > index;
-            return (
-              <View
-                key={index}
-                style={[styles.dotSlot, filled && styles.dotSlotFilled]}>
-                <View style={[styles.dot, filled && styles.dotFilled]} />
+    <View style={[styles.screen, compact && styles.screenCompact]}>
+      <View style={[styles.card, compact && styles.cardCompact]}>
+        {compact ? (
+          <>
+            <View style={styles.column}>
+              <View style={styles.header}>
+                <Text style={styles.brand}>Rusen Kopitiam</Text>
+                <Text style={styles.tagline}>Point of Sale System</Text>
               </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.errorSlot}>
-          {error ? (
-            <Text style={styles.errorText} accessibilityRole="alert">
-              {error}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.keypad}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-            <Key
-              key={digit}
-              label={String(digit)}
-              onPress={() => appendDigit(String(digit))}
-              disabled={loading || pinFull}
-            />
-          ))}
-
-          <Key label="Hapus" muted onPress={clear} disabled={loading || !pin} />
-          <Key
-            label="0"
-            onPress={() => appendDigit("0")}
-            disabled={loading || pinFull}
-          />
-          <Key
-            label="⌫"
-            accessibilityLabel="Hapus satu digit"
-            onPress={backspace}
-            disabled={loading || !pin}
-          />
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={submit}
-          disabled={loading || !pinFull}
-          style={({ pressed }) => [
-            styles.submit,
-            (loading || !pinFull) && styles.submitDisabled,
-            pressed && styles.submitPressed,
-          ]}>
-          {loading ? (
-            <View style={styles.submitLoading}>
-              <ActivityIndicator color={colors.neutral[0]} />
-              <Text style={styles.submitLabel}>Memeriksa PIN</Text>
+              {dots}
+              {errorSlot}
+              {submitButton}
             </View>
-          ) : (
-            <Text
-              style={[
-                styles.submitLabel,
-                !pinFull && styles.submitLabelDisabled,
-              ]}>
-              Masuk
-            </Text>
-          )}
-        </Pressable>
+            <View style={styles.column}>{keypad}</View>
+          </>
+        ) : (
+          <View style={styles.column}>
+            <View style={styles.header}>
+              <Text style={styles.brand}>Rusen Kopitiam</Text>
+              <Text style={styles.tagline}>Point of Sale System</Text>
+            </View>
+            <Text style={styles.prompt}>Masukkan PIN {PIN_LENGTH} digit</Text>
+            {dots}
+            {errorSlot}
+            {keypad}
+            {submitButton}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -155,12 +203,14 @@ function Key({
   onPress,
   disabled,
   muted,
+  compact,
   accessibilityLabel,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   muted?: boolean;
+  compact?: boolean;
   accessibilityLabel?: string;
 }) {
   return (
@@ -171,6 +221,7 @@ function Key({
       disabled={disabled}
       style={({ pressed }) => [
         styles.key,
+        compact && styles.keyCompact,
         pressed && styles.keyPressed,
         disabled && styles.keyDisabled,
       ]}>
@@ -191,6 +242,9 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     backgroundColor: colors.login.bg,
   },
+  screenCompact: {
+    padding: spacing.md,
+  },
   card: {
     width: "100%",
     maxWidth: 380,
@@ -199,6 +253,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.login.primary + "33",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
+  },
+  cardCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xl,
+    maxWidth: 620,
+    padding: spacing.lg,
+  },
+  column: {
+    flex: 1,
+    justifyContent: "center",
   },
   header: {
     alignItems: "center",
@@ -224,6 +289,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
+  dotRowCompact: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
   dotSlot: {
     width: 40,
     height: 40,
@@ -233,6 +303,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: colors.login.muted,
+  },
+  dotSlotCompact: {
+    width: 32,
+    height: 32,
   },
   dotSlotFilled: {
     borderColor: colors.login.accent,
@@ -254,6 +328,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
     marginBottom: spacing.sm,
+  },
+  errorSlotCompact: {
+    minHeight: 40,
+    marginBottom: spacing.xs,
   },
   errorText: {
     ...textStyles.caption,
@@ -285,6 +363,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
   },
+  // Tetap di atas ambang 48dp DESIGN.md walau layarnya pendek — target sentuh
+  // tidak dikorbankan demi muat.
+  keyCompact: {
+    minWidth: 64,
+    height: touchTarget.min,
+  },
   keyPressed: {
     backgroundColor: "rgba(255,255,255,0.09)",
   },
@@ -308,6 +392,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     borderRadius: radius.md,
     backgroundColor: colors.login.accent,
+  },
+  submitCompact: {
+    height: touchTarget.comfortable,
+    marginTop: spacing.sm,
   },
   submitPressed: {
     opacity: 0.9,
