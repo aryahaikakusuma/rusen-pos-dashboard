@@ -5,7 +5,8 @@ targeting tablet (primary, cashier station) and phone (secondary, owner reports)
 alongside `AGENTS.md`, `PRODUCT.md`, and `DESIGN.md` — this file covers only what changes
 for the mobile migration, not the product scope itself.
 
-**Status: steps 1-3 done and verified on device, step 4 next.** Progress and corrections are
+**Status: steps 1-3 verified on device. Steps 4-5 built and verified server-side; the phone
+layout has not yet been run on a device.** Progress and corrections are
 recorded per step below. Where reality contradicted the original plan, the correction is
 stated rather than the plan quietly rewritten.
 
@@ -179,19 +180,91 @@ phone in landscape the stacked layouts pushed controls off-screen entirely. Both
 split into two columns below 520dp of height, keyed on viewport height rather than device
 detection.
 
-## Step 4 — Sync engine (next)
+## Step 4 — Push queue ✅ (deliberately shrunk from "sync engine")
 
-- Watches for reconnection (`@react-native-community/netinfo`) and pushes `pending` records.
-- Conflict resolution: last-write-wins on timestamp.
-- Pull sync on reconnect for multi-device cases (owner's phone while the tablet is active).
-- Standalone module, independent of UI.
+The original plan here was a background sync engine: a `netinfo` listener watching for
+reconnection, last-write-wins conflict resolution, and pull sync for multi-device cases.
+That was cut, on Heika's reasoning: with a phone hotspot as the fallback, the realistic
+offline window at a single outlet is seconds to minutes, and two devices writing the same
+order inside that window effectively does not happen.
 
-## Step 5 — Cashier core flow
+What replaced it is smaller and easier to reason about. Orders stay `pending` locally, a
+badge in the Order tab shows how many are unsent, and a button pushes them. There is no
+background listener and no new dependency. The app does attempt one silent push at two
+moments that are certain to occur anyway — right after a payment, and once on app open with
+a session — because a queue that only ever moves when someone remembers to tap it can sit
+untouched until closing time. A failed silent attempt says nothing; the badge stays lit.
 
-Table/order code input, product grid with category sidebar, cart with quantity/notes/
-subtotal, and the cart → pending payment → paid transitions from `PRODUCT.md`. All writes
-land locally first. This is also where expo-router and the RLS policies for products,
-orders and payments arrive.
+**The correction that shaped the design.** The risk worth defending against was never two
+devices colliding. It is the same order being pushed twice because the request reached the
+server and the reply was lost — most likely precisely when the signal is bad, which is the
+condition this whole feature exists for. Order ids are generated on the device, so
+`push_order` is idempotent on `orders.id`: an id it has already seen returns success without
+writing. That is what makes handing a retry button to a cashier safe, and everything else
+here depends on it.
+
+`supabase/migrations/0005_push_order.sql` adds one `security definer` function and no new
+table grants. The alternative — granting `insert` on `orders`, `order_items` and `payments`
+to `authenticated` — would let anyone who unpacks the APK write arbitrary paid orders. The
+function recomputes `total` from the items it was handed and re-checks cash coverage: the
+device is trusted for identity, never for money. The outlet is taken from the author's
+`employees` row, never from the payload.
+
+One deliberate loosening: the author of an order may differ from the sender. Unsent orders
+survive a shift change (that is why `SQLiteProvider` sits outside `AuthProvider`), so an
+order written by Pagi is legitimately pushed while Sore is logged in. What is enforced is
+that the author is a real employee at the sender's own outlet.
+
+**Verified against the hosted database**, not just typechecked: a cross-shift push accepted;
+a repeat push returning `inserted: false` with row counts in `orders`, `order_items` and
+`payments` unchanged; total and change intact; outlet filled in by the server; a payload
+with a falsified total rejected with `TOTAL_MISMATCH`; underpaid cash rejected with
+`INSUFFICIENT_AMOUNT`; a call without a session rejected; and a direct `INSERT` into
+`orders` with a valid session still refused with 403 — the tables stay sealed.
+
+Still absent, and recorded as a decision rather than an oversight: automatic sync on
+reconnect, pull sync, and conflict resolution. If a second device ever runs the till at the
+same time, this is the first thing that has to be revisited.
+
+## Step 5 — Cashier core flow ✅
+
+Table/order code input, product grid, cart, and the cart → pending payment → paid
+transitions from `PRODUCT.md`. All writes land locally first, through the step 3 layer.
+
+**The phone became the primary target, not the tablet.** Heika will open with a phone held
+vertically, so `app.json` moved from `orientation: "landscape"` to `"default"`. That lock is
+also what made the PIN screen unusable on a phone earlier — the app was refusing to render
+vertically at all, which no amount of layout work could have fixed.
+
+Portrait is not the tablet layout shrunk. At roughly 400dp, three side-by-side columns leave
+each about 130dp and the product codes stop being readable. So the phone layout stacks:
+table code and search on top, categories as a horizontal chip strip, a two-column product
+grid filling the rest, and the cart as a bottom bar that opens into a full-height sheet. The
+cart is a sheet rather than a permanent panel because a permanent one would leave the grid
+two rows tall. Landscape still gets the three columns from `DESIGN.md`.
+
+Both layouts share every component in `mobile/components/`, so neither is the "real" one
+with the other bolted on. The one width threshold lives in `theme/layout.ts` and is read
+through `lib/use-layout-mode.ts` — keyed on width, not device detection, because what
+decides whether three columns fit is available width, not brand.
+
+Screens: `CashierScreen` (port of `components/CashierScreen.tsx`, same save flow — check the
+table code, let the cashier decide same-customer or different, then write), `OrdersScreen`
+(the queue as cards, not the web's six-column table, which has no portrait equivalent),
+`EditOrderScreen` (append items and void items, re-reading the order after every write since
+both operations bump `version`), and `AppShell` (two tabs).
+
+**expo-router was not installed**, contrary to the earlier plan in this file. Two screens do
+not justify file-based routing; a tab state does. Revisit at step 6 if the screen count
+grows. `react-native-safe-area-context` was added — bundled in Expo Go, so `start:go` is
+unaffected.
+
+**The step 3 self-test was not deleted.** It moved to `screens/DebugScreen.tsx`, reachable
+from the "Uji" button in the header. It is the only regression suite this project has, and
+step 4 touches the same tables.
+
+No "Cetak Struk" button anywhere — the printer is step 7, and a button that silently does
+nothing is worse than an absent one.
 
 ## Step 6 — Reports and attendance
 
@@ -226,9 +299,16 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
   authoritative for day-to-day use, and the outlet is currently running on the web build.
 - ~~On-device verification outstanding~~ **Resolved.** Login, the catalog pull, and the full
   step 3 self-test have all run on a phone, the last of them offline.
-- **Tested on a phone, not on the outlet tablet.** Every on-device result so far comes from
-  a personal phone in landscape. The tablet is the real target and has never run this build;
-  `PRODUCT.md`'s three-column cashier layout has never been seen at its intended size.
+- **Tested on a phone, not on the outlet tablet.** The phone is now the primary target and
+  the tablet the secondary, so this matters less than it did — but the three-column layout
+  still exists in code and has only ever been seen on a rotated phone, never at tablet size.
+- **The steps 4-5 UI has not run on a device yet.** Everything so far is a clean typecheck,
+  a clean `expo-doctor`, and nine server-side checks against the hosted database. The step 3
+  lesson stands: this layer's failure mode is latency and layout, and neither shows up in a
+  typecheck.
+- **`payments` has no `ON DELETE CASCADE` in Postgres but does in the local SQLite schema.**
+  Harmless today — nothing deletes orders in production — but the two schemas differ, and
+  the divergence surfaced while cleaning up a test order by hand.
 - **Seed PINs are live on a public database.** `Pagi 123456`, `Sore 654321`, `Owner 000000`.
   The rate limit blunts the risk, but `000000` on the owner account should not survive to
   opening day.

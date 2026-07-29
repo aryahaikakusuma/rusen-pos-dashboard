@@ -138,6 +138,19 @@ export async function catalogPulledAt(
   return row?.value ?? null;
 }
 
+export async function listCategories(
+  db: SQLiteDatabase
+): Promise<CategoryRow[]> {
+  return db.getAllAsync<CategoryRow>(
+    "select * from categories where active = 1 order by sort_order, name"
+  );
+}
+
+/**
+ * Seluruh produk aktif sekaligus. 293 baris teks pendek — menahannya di memori
+ * jauh lebih murah daripada menembak SQLite tiap kali kasir mengganti kategori
+ * atau mengetik satu huruf di kolom pencarian.
+ */
 export async function listProducts(
   db: SQLiteDatabase
 ): Promise<ProductRow[]> {

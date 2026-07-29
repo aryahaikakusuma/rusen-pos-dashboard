@@ -4,10 +4,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { migrateDbIfNeeded } from './db/migrations';
 import { AuthProvider, useAuth } from './lib/auth-context';
-import HomeScreen from './screens/HomeScreen';
+import AppShell from './screens/AppShell';
 import LoginScreen from './screens/LoginScreen';
 import { appFonts, colors } from './theme';
 
@@ -30,18 +31,19 @@ export default function App() {
     // SQLiteProvider di luar AuthProvider: database lokal tidak bergantung pada
     // sesi, dan justru harus tetap ada saat pegawai keluar — order yang belum
     // tersinkron tidak boleh hilang hanya karena ganti shift.
-    <SQLiteProvider databaseName="rusen-pos.db" onInit={migrateDbIfNeeded}>
-      <AuthProvider>
-        <Root />
-      </AuthProvider>
-    </SQLiteProvider>
+    <SafeAreaProvider>
+      <SQLiteProvider databaseName="rusen-pos.db" onInit={migrateDbIfNeeded}>
+        <AuthProvider>
+          <Root />
+        </AuthProvider>
+      </SQLiteProvider>
+    </SafeAreaProvider>
   );
 }
 
 /**
- * Dua keadaan saja untuk sekarang, jadi percabangan biasa sudah cukup.
- * expo-router baru dipasang di langkah 5, saat ada layar yang benar-benar
- * perlu dinavigasi.
+ * Masuk atau tidak masuk — dua keadaan, jadi percabangan biasa sudah cukup.
+ * Perpindahan antar layar di dalam sesi ditangani AppShell.
  */
 function Root() {
   const { session, restoring } = useAuth();
@@ -58,7 +60,7 @@ function Root() {
   return (
     <>
       <StatusBar style={session ? 'dark' : 'light'} />
-      {session ? <HomeScreen /> : <LoginScreen />}
+      {session ? <AppShell /> : <LoginScreen />}
     </>
   );
 }

@@ -409,8 +409,29 @@ export async function clearTestOrders(db: SQLiteDatabase): Promise<number> {
   return result.changes;
 }
 
-/** Order terbaru beserta itemnya. Dipakai layar uji langkah 3; layar kasir
- *  sungguhan di langkah 5 akan memakai query yang lebih sempit. */
+/**
+ * Satu order beserta itemnya. Layar ubah order harus membacanya ulang setiap
+ * kali menulis: appendToOrder dan voidOrderItem menaikkan `version`, dan
+ * memakai angka lama pada tulisan berikutnya berujung STALE_ORDER.
+ */
+export async function getOrder(
+  db: SQLiteDatabase,
+  orderId: string
+): Promise<(OrderRow & { items: OrderItemRow[] }) | null> {
+  const order = await db.getFirstAsync<OrderRow>(
+    "select * from orders where id = ?",
+    [orderId]
+  );
+  if (!order) return null;
+
+  const items = await db.getAllAsync<OrderItemRow>(
+    "select * from order_items where order_id = ? order by rowid",
+    [orderId]
+  );
+  return { ...order, items };
+}
+
+/** Order terbaru beserta itemnya. */
 export async function listRecentOrders(
   db: SQLiteDatabase,
   limit = 20

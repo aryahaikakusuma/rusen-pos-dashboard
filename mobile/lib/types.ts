@@ -28,3 +28,29 @@ export interface Session {
   /** Detik epoch, sama dengan klaim `exp` pada token. */
   expiresAt: number;
 }
+
+/** Item di keranjang yang belum menyentuh database sama sekali. */
+export interface DraftItem {
+  productId: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  notes: string;
+}
+
+export function tableLabel(tableCode: string, tableSeq: number): string {
+  return tableSeq > 1 ? `${tableCode} (${tableSeq})` : tableCode;
+}
+
+/**
+ * Sama persis dengan web. Hermes membawa Intl penuh sejak React Native 0.73,
+ * jadi locale id-ID tersedia tanpa polyfill.
+ */
+export function formatRupiah(amount: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}

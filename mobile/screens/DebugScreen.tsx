@@ -2,14 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useSQLiteContext } from "expo-sqlite";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 
+import Button from "../components/Button";
 import { catalogPulledAt, listProducts, pullCatalog } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import {
@@ -17,7 +16,6 @@ import {
   checkTableCode,
   clearTestOrders,
   createOrder,
-  listRecentOrders,
   payOrder,
   TEST_TABLE_PREFIX,
   voidOrderItem,
@@ -30,58 +28,37 @@ import {
   semantic,
   spacing,
   textStyles,
-  touchTarget,
 } from "../theme";
 
 /**
- * Layar sementara langkah 3. Bukan UI kasir — layar itu baru dibangun di
- * langkah 5. Tugas layar ini cuma satu: membuktikan lapisan database lokal
- * berperilaku sama dengan fungsi Postgres yang ditirunya, tanpa perlu ada UI.
+ * Bukan layar kasir — ini satu-satunya rangkaian uji regresi yang dimiliki
+ * proyek ini, dan sengaja tidak dibuang saat layar kasir sungguhan dibangun.
  *
- * Cara pakainya: matikan koneksi, tekan "Jalankan uji lokal", baca hasilnya.
- * Semua baris harus OK. Kalau ada yang GAGAL, itu penyimpangan nyata antara
- * port lokal dan aturan di 0001_init.sql.
+ * Isinya membuktikan lapisan database lokal berperilaku sama dengan fungsi
+ * Postgres yang ditirunya. Cara pakainya: matikan koneksi, tekan "Jalankan uji
+ * lokal", baca hasilnya. Semua baris harus OK; satu GAGAL berarti ada
+ * penyimpangan nyata terhadap aturan di 0001_init.sql.
  */
-export default function HomeScreen() {
-  const { session, logout } = useAuth();
+export default function DebugScreen({ onClose }: { onClose: () => void }) {
+  const { session } = useAuth();
   const db = useSQLiteContext();
-  const { height } = useWindowDimensions();
-
-  // Sama seperti layar login: aplikasi dikunci landscape untuk tablet, jadi di
-  // ponsel tingginya sempit dan isi yang ditumpuk vertikal tidak terjangkau.
-  const compact = height < 520;
 
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [catalog, setCatalog] = useState("Katalog belum pernah ditarik.");
-  const [orders, setOrders] = useState<
-    Array<{ id: string; label: string; status: string; sync: string }>
-  >([]);
 
   const append = (line: string) => setLog((prev) => [...prev, line]);
 
-  const refreshOrders = useCallback(async () => {
-    const rows = await listRecentOrders(db, 10);
-    setOrders(
-      rows.map((o) => ({
-        id: o.id,
-        label: `${o.table_code}${o.table_seq > 1 ? ` (${o.table_seq})` : ""} · ${
-          o.items.length
-        } item · ${rupiah(o.total)}`,
-        status: o.status,
-        sync: o.sync_status,
-      }))
-    );
+  const describeCatalog = useCallback(async () => {
+    const at = await catalogPulledAt(db);
+    if (!at) return;
+    const products = await listProducts(db);
+    setCatalog(`${products.length} produk lokal · ditarik ${short(at)}`);
   }, [db]);
 
   useEffect(() => {
-    catalogPulledAt(db).then(async (at) => {
-      if (!at) return;
-      const products = await listProducts(db);
-      setCatalog(`${products.length} produk lokal · ditarik ${short(at)}`);
-    });
-    refreshOrders();
-  }, [db, refreshOrders]);
+    void describeCatalog();
+  }, [describeCatalog]);
 
   async function handlePull() {
     setBusy(true);
@@ -110,7 +87,6 @@ export default function HomeScreen() {
     } catch (error) {
       append(`GAGAL hapus data uji: ${(error as Error).message}`);
     } finally {
-      await refreshOrders();
       setBusy(false);
     }
   }
@@ -124,124 +100,61 @@ export default function HomeScreen() {
     } catch (error) {
       append(`GAGAL tak terduga: ${translateOrderError(error)}`);
     } finally {
-      await refreshOrders();
       setBusy(false);
     }
   }
 
-  const logPanel = (
-    <View style={styles.panel}>
-      <ScrollView contentContainerStyle={styles.panelInner}>
-        {log.map((line, index) => (
-          <Text
-            key={index}
-            style={[
-              styles.logLine,
-              line.startsWith("GAGAL") && styles.logLineFail,
-            ]}>
-            {line}
-          </Text>
-        ))}
-        {log.length === 0 ? (
-          <Text style={styles.caption}>
-            Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal
-            boleh dijalankan dalam mode pesawat.
-          </Text>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-
-  const orderPanel = (
-    <View style={styles.panel}>
-      <ScrollView contentContainerStyle={styles.panelInner}>
-        {orders.map((o) => (
-          <View key={o.id} style={styles.orderRow}>
-            <Text style={styles.orderLabel}>{o.label}</Text>
-            <Text style={styles.orderMeta}>
-              {o.status} · sync {o.sync}
-            </Text>
-          </View>
-        ))}
-        {orders.length === 0 ? (
-          <Text style={styles.caption}>Belum ada order lokal.</Text>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Halo, {session?.name}</Text>
-          <Text style={styles.role}>{session?.role}</Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={logout}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-          <Text style={styles.buttonLabel}>Keluar</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={handlePull}
-          style={({ pressed }) => [
-            styles.button,
-            busy && styles.disabled,
-            pressed && styles.pressed,
-          ]}>
-          <Text style={styles.buttonLabel}>Tarik katalog</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={handleSelfTest}
-          style={({ pressed }) => [
-            styles.button,
-            styles.buttonPrimary,
-            busy && styles.disabled,
-            pressed && styles.pressed,
-          ]}>
-          <Text style={[styles.buttonLabel, styles.buttonPrimaryLabel]}>
-            Jalankan uji lokal
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={handleClearTests}
-          style={({ pressed }) => [
-            styles.button,
-            busy && styles.disabled,
-            pressed && styles.pressed,
-          ]}>
-          <Text style={styles.buttonLabel}>Hapus data uji</Text>
-        </Pressable>
-        {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
+        <Text style={styles.title}>Uji lapisan lokal</Text>
+        <Button label="Tutup" onPress={onClose} style={styles.close} />
       </View>
 
       <Text style={styles.caption}>{catalog}</Text>
 
-      {/* Dua panel bersebelahan saat layar pendek: lebar landscape ponsel
-          justru berlimpah, yang kurang tingginya. Ditumpuk vertikal, panel
-          bawah jadi tak terjangkau. */}
-      <View style={[styles.panels, compact && styles.panelsRow]}>
-        <View style={styles.panelWrap}>
-          <Text style={styles.caption}>Hasil uji</Text>
-          {logPanel}
-        </View>
-        <View style={styles.panelWrap}>
-          <Text style={styles.caption}>
-            Order lokal terbaru — semuanya akan tertulis “sync pending” sampai
-            langkah 4 dibangun
-          </Text>
-          {orderPanel}
-        </View>
+      <View style={styles.actions}>
+        <Button
+          label="Tarik katalog"
+          disabled={busy}
+          onPress={() => void handlePull()}
+          style={styles.action}
+        />
+        <Button
+          label="Jalankan uji lokal"
+          variant="primary"
+          disabled={busy}
+          onPress={() => void handleSelfTest()}
+          style={styles.action}
+        />
+        <Button
+          label="Hapus data uji"
+          disabled={busy}
+          onPress={() => void handleClearTests()}
+          style={styles.action}
+        />
+        {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
+      </View>
+
+      <View style={styles.panel}>
+        <ScrollView contentContainerStyle={styles.panelInner}>
+          {log.map((line, index) => (
+            <Text
+              key={index}
+              style={[
+                styles.logLine,
+                line.startsWith("GAGAL") && styles.logLineFail,
+              ]}>
+              {line}
+            </Text>
+          ))}
+          {log.length === 0 ? (
+            <Text style={styles.caption}>
+              Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal
+              boleh dijalankan dalam mode pesawat.
+            </Text>
+          ) : null}
+        </ScrollView>
       </View>
     </View>
   );
@@ -277,7 +190,11 @@ async function runSelfTest(
     }
   };
 
-  const expectThrows = async (label: string, code: string, fn: () => Promise<unknown>) => {
+  const expectThrows = async (
+    label: string,
+    code: string,
+    fn: () => Promise<unknown>
+  ) => {
     try {
       await fn();
       append(`GAGAL ${label}: seharusnya ditolak dengan ${code}`);
@@ -392,13 +309,16 @@ async function runSelfTest(
     }
   });
 
-  await expectThrows("bayar tunai kurang dari total", "INSUFFICIENT_AMOUNT", () =>
-    payOrder(db, {
-      orderId,
-      method: "cash",
-      amountReceived: 1,
-      employeeId,
-    })
+  await expectThrows(
+    "bayar tunai kurang dari total",
+    "INSUFFICIENT_AMOUNT",
+    () =>
+      payOrder(db, {
+        orderId,
+        method: "cash",
+        amountReceived: 1,
+        employeeId,
+      })
   );
 
   await check("pelunasan tunai + kembalian benar", async () => {
@@ -407,19 +327,35 @@ async function runSelfTest(
       [orderId]
     );
     const received = order!.total + 50_000;
-    await payOrder(db, { orderId, method: "cash", amountReceived: received, employeeId });
+    await payOrder(db, {
+      orderId,
+      method: "cash",
+      amountReceived: received,
+      employeeId,
+    });
     const paid = await db.getFirstAsync<{
       status: string;
       change_amount: number;
       sync_status: string;
-    }>("select status, change_amount, sync_status from orders where id = ?", [orderId]);
+    }>("select status, change_amount, sync_status from orders where id = ?", [
+      orderId,
+    ]);
     if (paid?.status !== "paid") throw new Error("status bukan paid");
-    if (paid.change_amount !== 50_000) throw new Error(`kembalian ${paid.change_amount}`);
-    if (paid.sync_status !== "pending") throw new Error("sync_status bukan pending");
+    if (paid.change_amount !== 50_000) {
+      throw new Error(`kembalian ${paid.change_amount}`);
+    }
+    if (paid.sync_status !== "pending") {
+      throw new Error("sync_status bukan pending");
+    }
   });
 
   await check("pelunasan idempoten, payments tetap satu baris", async () => {
-    await payOrder(db, { orderId, method: "cash", amountReceived: 999_999, employeeId });
+    await payOrder(db, {
+      orderId,
+      method: "cash",
+      amountReceived: 999_999,
+      employeeId,
+    });
     const n = await db.getFirstAsync<{ n: number }>(
       "select count(*) as n from payments where order_id = ?",
       [orderId]
@@ -465,7 +401,6 @@ async function runSelfTest(
   append("— selesai —");
 }
 
-const rupiah = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 const short = (iso: string) => new Date(iso).toLocaleString("id-ID");
 
 const styles = StyleSheet.create({
@@ -479,9 +414,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.md,
   },
-  greeting: { ...textStyles.screenTitle, color: semantic.textPrimary },
-  role: { ...textStyles.statusBadge, color: semantic.textSecondary },
+  title: {
+    ...textStyles.screenTitle,
+    flex: 1,
+    color: semantic.textPrimary,
+  },
+  close: {
+    paddingHorizontal: spacing.lg,
+  },
   caption: { ...textStyles.caption, color: semantic.textSecondary },
   actions: {
     flexDirection: "row",
@@ -489,9 +431,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  panels: { flex: 1, gap: spacing.sm },
-  panelsRow: { flexDirection: "row" },
-  panelWrap: { flex: 1, gap: spacing.xs },
+  action: {
+    flexGrow: 1,
+  },
   panel: {
     flex: 1,
     borderRadius: radius.md,
@@ -500,26 +442,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
   },
   panelInner: { padding: spacing.md, gap: spacing.xs },
-  button: {
-    minHeight: touchTarget.min,
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: border.hairline,
-    borderColor: semantic.border,
-    backgroundColor: colors.neutral[0],
-  },
-  buttonPrimary: {
-    backgroundColor: colors.primary[600],
-    borderColor: colors.primary[600],
-  },
-  pressed: { opacity: 0.7 },
-  disabled: { opacity: 0.4 },
-  buttonLabel: { ...textStyles.bodyStrong, color: semantic.textPrimary },
-  buttonPrimaryLabel: { color: colors.neutral[0] },
   logLine: { ...textStyles.caption, color: semantic.textPrimary },
   logLineFail: { color: colors.status.void },
-  orderRow: { gap: 2 },
-  orderLabel: { ...textStyles.body, color: semantic.textPrimary },
-  orderMeta: { ...textStyles.caption, color: semantic.textSecondary },
 });
