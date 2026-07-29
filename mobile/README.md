@@ -1,14 +1,37 @@
 # Rusen POS — mobile (Expo)
 
-React Native port of the web POS. Steps 1-2 of MIGRATION.md are done: project scaffold
-and PIN login. No cashier flow, local DB, sync engine, or printer code yet.
+React Native port of the web POS. Steps 1-3 of MIGRATION.md are built: project scaffold,
+PIN login, and the local SQLite layer. No cashier UI, sync engine, or printer code yet.
 
 ## Stack
 
 - Expo SDK 57 / React Native 0.86 / React 19.2, TypeScript strict.
 - Poppins (`@expo-google-fonts/poppins`) loaded at runtime via `useFonts`.
 - `expo-secure-store` holds the session token — not AsyncStorage, this is auth data.
+- `expo-sqlite` for the local database, `expo-crypto` for device-side UUIDs. Both ship
+  inside Expo Go, so the local DB work needs no custom build.
 - `expo-dev-client` installed ahead of step 7 (printer native modules can't run in Expo Go).
+
+## Local database (`db/`)
+
+`db/orders.ts` is a deliberate line-by-line port of the Postgres RPCs in
+`supabase/migrations/0001_init.sql:206-469`, not a reimplementation. After step 4 the same
+order can be validated on the device and on the server, and the two must agree — so the
+rules and the error codes are identical on both sides. Read that SQL before changing
+anything here.
+
+- `migrations.ts` — schema plus a `PRAGMA user_version` runner. Column names match Postgres
+  so step 4's sync payloads stay near-literal. Bump `DATABASE_VERSION` and add a new `if`
+  block for any schema change; installed tablets must upgrade, not wipe.
+- `orders.ts` — `checkTableCode`, `createOrder`, `appendToOrder`, `voidOrderItem`,
+  `payOrder`. Prices always read from the local `products` table, never from the caller.
+- `catalog.ts` — one-way pull of `categories` and `products` from Supabase. This is **not**
+  the sync engine; local orders still go nowhere and stay `sync_status = 'pending'`.
+- `errors.ts` — the same short codes the RPCs raise, and their Indonesian translations.
+
+To verify it, log in, tap **Tarik katalog** once while online, then **Jalankan uji lokal** —
+the self-test exercises the full order lifecycle and every rejection path. Re-run it in
+airplane mode: the local layer must not touch the network at all.
 
 ## Auth — and why the backend had to change
 

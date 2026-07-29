@@ -5,9 +5,9 @@ targeting tablet (primary, cashier station) and phone (secondary, owner reports)
 alongside `AGENTS.md`, `PRODUCT.md`, and `DESIGN.md` — this file covers only what changes
 for the mobile migration, not the product scope itself.
 
-**Status: steps 1-2 done, step 3 next.** Progress and corrections are recorded per step
-below. Where reality contradicted the original plan, the correction is stated rather than
-the plan quietly rewritten.
+**Status: steps 1-3 built, step 3 not yet verified on device, step 4 next.** Progress and
+corrections are recorded per step below. Where reality contradicted the original plan, the
+correction is stated rather than the plan quietly rewritten.
 
 ## Why this migration
 
@@ -24,7 +24,7 @@ over with minimal rework.
   Tailwind v3 while the web app is on Tailwind v4; v4 support exists only in NativeWind 5
   preview. Revisit when it stabilises — `mobile/theme/` works with either.
 - Font: Poppins via `@expo-google-fonts/poppins` and `useFonts`.
-- Local database: WatermelonDB or op-sqlite — **not yet chosen**, decided in step 3.
+- Local database: **expo-sqlite** (chosen in step 3 — reasoning recorded there).
 - Supabase JS client with the **anon** key, under real RLS policies.
 - Printer: react-native-esc-pos-printer or react-native-thermal-receipt-printer for the
   Blueprint ECO 58D (USB + Bluetooth Classic + RJ11 for cash drawer).
@@ -109,15 +109,63 @@ touches it — it is new product work, not a port, and needs its own decisions (
 automatic on login, or a separate action? can a cashier clock out with unpaid orders open?).
 Explicitly not a priority right now.
 
-## Step 3 — Local database layer (next)
+## Step 3 — Local database layer ✅ built, ⏳ unverified on device
 
-- Choose WatermelonDB or op-sqlite, then mirror the relevant Supabase tables locally:
-  orders, order_items, payments, refunds, refund_items, attendance_logs.
-- Every local record gets `sync_status` (`pending`, `synced`, `error`).
-- Build this before porting the cashier UI — the UI reads and writes local storage only,
-  never Supabase directly.
+**Library: expo-sqlite**, not WatermelonDB or op-sqlite. Both alternatives are third-party
+native modules, so adopting either would have forced a custom dev build immediately and
+ended the Expo Go workflow mid-migration. expo-sqlite ships inside Expo Go, is first-party
+so SDK upgrades stay clean, and exposes raw SQL — which matters more than it sounds, see
+below. Its performance disadvantage against op-sqlite's JSI bridge is real and irrelevant
+at one cafe's transaction volume.
 
-## Step 4 — Sync engine
+WatermelonDB was rejected on a second count: its selling point is a built-in sync protocol
+that expects purpose-built push/pull endpoints, and this backend's write path is a set of
+Postgres RPCs. That mismatch would have cost more than writing step 4 by hand.
+
+**The actual difficulty of this step was not SQLite.** All the till's business rules live
+inside Postgres functions — `create_order`, `append_to_order`, `void_order_item`,
+`pay_order`, `check_table_code` in `0001_init.sql:206-469`. Working offline means those
+rules have to run on the device too, so `mobile/db/orders.ts` is a line-by-line port, not a
+reimplementation. After step 4 the same order can be validated in both places, and the two
+must agree; drift here would surface as sync rejecting orders that looked fine to the
+cashier. The error codes (`STALE_ORDER`, `INSUFFICIENT_AMOUNT`, …) are identical on both
+sides for the same reason.
+
+What was built:
+
+- **`mobile/db/migrations.ts`** — SQLite schema mirroring the Postgres columns *by name*, so
+  step 4's sync payloads are near-literal. Money stays `INTEGER` rupiah; `subtotal`/`amount`
+  stay generated columns; the `paid_fields_consistent` and `cash_covers_total` CHECKs are
+  ported and were tested to reject the same rows Postgres rejects. Migrations run off
+  `PRAGMA user_version` so an installed tablet upgrades instead of wiping.
+- **`mobile/db/orders.ts`** — the five RPC ports, each in an exclusive transaction. Prices
+  always come from the local `products` table, never from the caller — the same rule as the
+  server, for the same reason.
+- **`mobile/db/catalog.ts`** + **`supabase/migrations/0004_catalog_access.sql`** — read-only
+  catalog pull. `0004` opens `categories` and `products` to `authenticated`, scoped to the
+  employee's own outlet. No write grants: product prices must not be editable from an APK.
+- **`mobile/screens/HomeScreen.tsx`** — temporary. Replaced by the real cashier screen in
+  step 5.
+
+**One deliberate divergence from Postgres,** marked in the code: `create_order` does a
+`join products`, so an unknown `productId` is silently dropped from the order. On the server
+that is nearly impossible — the catalog is always current. On a device the local catalog can
+be stale, and an item vanishing without a sound means a customer is served but not charged.
+The local port throws `PRODUCT_NOT_FOUND` instead.
+
+Added for offline: `sync_status` (`pending`/`synced`/`error`) plus `sync_error` and
+`synced_at` on every locally authored table. Order ids are generated on the device — the
+schema anticipated this from the start (`orders.id` is commented "klien boleh kirim",
+and `client_created_at` already exists).
+
+`refunds` / `refund_items` were left out: no code in the web app touches them, and they are
+report-side rather than till-side. They belong with step 6.
+
+**Not yet verified.** The schema's constraints and generated columns were tested against a
+real SQLite engine, and typecheck is clean, but the self-test screen has not been run on the
+phone — including the airplane-mode pass that is the entire point of the step.
+
+## Step 4 — Sync engine (next)
 
 - Watches for reconnection (`@react-native-community/netinfo`) and pushes `pending` records.
 - Conflict resolution: last-write-wins on timestamp.
@@ -150,13 +198,20 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 
 ## Open items
 
-- **Supabase is local, not hosted.** `SUPABASE_URL` is `127.0.0.1:54321`; the phone reaches
-  it only over the LAN. A hosted project is required before the outlet tablet is real.
+- **Supabase is still local, not hosted** — and this is now the blocking item. `SUPABASE_URL`
+  is a LAN address pointing at Docker on the development PC, so the catalog pull only works
+  while that PC is running. Heika decided to stand the hosted project up now rather than at
+  step 4. Needs: the project created, `supabase/migrations/` pushed and seeded,
+  `SESSION_JWT_SECRET` set as a Function secret, and both clients repointed.
 - **JWT signing on a hosted project.** `pin-login` signs HS256 against the legacy JWT
   secret. A project switched to asymmetric signing keys would reject those tokens, and login
-  would have to move to shadow `auth.users` rows. Verify before the first cloud deploy.
+  would have to move to shadow `auth.users` rows. Check Project Settings → API before
+  migrating — this is the one thing that could force a rewrite rather than a config change.
 - **Cleartext HTTP.** Fine in development; production needs HTTPS, which a hosted Supabase
-  project provides automatically.
+  project provides automatically. Resolved by the move above.
+- **On-device verification is outstanding for both step 2 and step 3.** Login has never been
+  exercised on the phone, and neither has the step 3 self-test. Both should be run against
+  the hosted URL so the work isn't repeated.
 - The root `README.md` is still create-next-app boilerplate.
 
 ## Testing approach

@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { migrateDbIfNeeded } from './db/migrations';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -25,9 +27,14 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <Root />
-    </AuthProvider>
+    // SQLiteProvider di luar AuthProvider: database lokal tidak bergantung pada
+    // sesi, dan justru harus tetap ada saat pegawai keluar — order yang belum
+    // tersinkron tidak boleh hilang hanya karena ganti shift.
+    <SQLiteProvider databaseName="rusen-pos.db" onInit={migrateDbIfNeeded}>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </SQLiteProvider>
   );
 }
 

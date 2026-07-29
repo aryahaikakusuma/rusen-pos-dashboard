@@ -4,6 +4,11 @@ export const PIN_LENGTH = 6;
 
 export type EmployeeRole = "cashier" | "manager" | "owner";
 
+/** Status order di database. Perhatikan: TIDAK ada "cart" di sini. */
+export type OrderStatus = "pending" | "paid" | "void";
+
+export type PaymentMethod = "cash" | "non_cash";
+
 export interface Employee {
   id: string;
   name: string;
