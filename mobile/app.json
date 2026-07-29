@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Rusen POS",
+    "slug": "rusen-pos",
+    "owner": "heikarya",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rusenkopitiam.pos"
+    },
+    "android": {
+      "package": "com.rusenkopitiam.pos",
+      "adaptiveIcon": {
+        "backgroundColor": "#1e3a5f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0f172a",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "247500bf-2f97-4582-bcac-594ded5ea4e1"
+      }
+    }
+  }
+}
