@@ -77,6 +77,7 @@ export default function HomeScreen() {
 
   async function handlePull() {
     setBusy(true);
+    setCatalog("Menarik katalog dari server…");
     try {
       const result = await pullCatalog(db);
       setCatalog(
@@ -86,6 +87,7 @@ export default function HomeScreen() {
       );
       append(`OK  tarik katalog: ${result.products} produk`);
     } catch (error) {
+      setCatalog("Tarik katalog gagal.");
       append(`GAGAL tarik katalog: ${(error as Error).message}`);
     } finally {
       setBusy(false);
@@ -128,7 +130,11 @@ export default function HomeScreen() {
           accessibilityRole="button"
           disabled={busy}
           onPress={handlePull}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
+          style={({ pressed }) => [
+            styles.button,
+            busy && styles.disabled,
+            pressed && styles.pressed,
+          ]}>
           <Text style={styles.buttonLabel}>Tarik katalog</Text>
         </Pressable>
         <Pressable
@@ -138,6 +144,7 @@ export default function HomeScreen() {
           style={({ pressed }) => [
             styles.button,
             styles.buttonPrimary,
+            busy && styles.disabled,
             pressed && styles.pressed,
           ]}>
           <Text style={[styles.buttonLabel, styles.buttonPrimaryLabel]}>
@@ -434,6 +441,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[600],
   },
   pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.4 },
   buttonLabel: { ...textStyles.bodyStrong, color: semantic.textPrimary },
   buttonPrimaryLabel: { color: colors.neutral[0] },
   logBox: {

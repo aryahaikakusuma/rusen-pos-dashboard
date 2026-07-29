@@ -37,38 +37,39 @@ export async function pullCatalog(
   await db.withExclusiveTransactionAsync(async (txn) => {
     // Upsert, bukan hapus-lalu-isi. Menghapus dulu akan membuat perangkat
     // sempat tidak punya katalog sama sekali kalau prosesnya mati di tengah.
-    for (const c of categoryRows) {
-      await txn.runAsync(
-        `insert into categories (id, outlet_id, code, name, sort_order, active)
-         values (?, ?, ?, ?, ?, ?)
-         on conflict(id) do update set
-           outlet_id = excluded.outlet_id, code = excluded.code,
-           name = excluded.name, sort_order = excluded.sort_order,
-           active = excluded.active`,
-        [c.id, c.outlet_id, c.code, c.name, c.sort_order, c.active ? 1 : 0]
-      );
-    }
+    //
+    // Ditulis berkelompok, bukan satu baris satu perintah. Katalognya 293
+    // produk; satu runAsync per baris berarti 300-an lintasan JS ke native di
+    // dalam satu transaksi eksklusif, dan di ponsel itu terasa seperti aplikasi
+    // menggantung. Berkelompok menekannya jadi segelintir perintah.
+    await upsertChunked(
+      txn,
+      "categories",
+      ["id", "outlet_id", "code", "name", "sort_order", "active"],
+      categoryRows.map((c) => [
+        c.id,
+        c.outlet_id,
+        c.code,
+        c.name,
+        c.sort_order,
+        c.active ? 1 : 0,
+      ])
+    );
 
-    for (const p of productRows) {
-      await txn.runAsync(
-        `insert into products
-           (id, outlet_id, category_id, code, name, price, active)
-         values (?, ?, ?, ?, ?, ?, ?)
-         on conflict(id) do update set
-           outlet_id = excluded.outlet_id, category_id = excluded.category_id,
-           code = excluded.code, name = excluded.name,
-           price = excluded.price, active = excluded.active`,
-        [
-          p.id,
-          p.outlet_id,
-          p.category_id,
-          p.code,
-          p.name,
-          p.price,
-          p.active ? 1 : 0,
-        ]
-      );
-    }
+    await upsertChunked(
+      txn,
+      "products",
+      ["id", "outlet_id", "category_id", "code", "name", "price", "active"],
+      productRows.map((p) => [
+        p.id,
+        p.outlet_id,
+        p.category_id,
+        p.code,
+        p.name,
+        p.price,
+        p.active ? 1 : 0,
+      ])
+    );
 
     // outlet_id dipakai createOrder. Di Postgres nilainya diambil dari baris
     // employees; perangkat tidak menyimpan tabel itu, jadi diambil dari katalog.
@@ -93,6 +94,38 @@ export async function pullCatalog(
     products: productRows.length,
     pulledAt,
   };
+}
+
+/**
+ * Upsert banyak baris dengan sesedikit mungkin perintah. Dipecah per kelompok
+ * karena SQLite membatasi jumlah parameter dalam satu pernyataan; 100 baris
+ * dikali 7 kolom masih jauh di bawah batas itu.
+ */
+async function upsertChunked(
+  db: SQLiteDatabase,
+  table: string,
+  columns: string[],
+  rows: Array<Array<string | number>>,
+  chunkSize = 100
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  // Semua kolom kecuali id ditimpa nilai baru.
+  const updates = columns
+    .filter((c) => c !== "id")
+    .map((c) => `${c} = excluded.${c}`)
+    .join(", ");
+  const placeholder = `(${columns.map(() => "?").join(", ")})`;
+
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    await db.runAsync(
+      `insert into ${table} (${columns.join(", ")})
+       values ${chunk.map(() => placeholder).join(", ")}
+       on conflict(id) do update set ${updates}`,
+      chunk.flat()
+    );
+  }
 }
 
 /** Kapan katalog terakhir ditarik — null kalau belum pernah. */

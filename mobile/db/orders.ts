@@ -396,16 +396,29 @@ export async function listRecentOrders(
     "select * from orders order by created_at desc limit ?",
     [limit]
   );
+  if (orders.length === 0) return [];
 
-  return Promise.all(
-    orders.map(async (order) => ({
-      ...order,
-      items: await db.getAllAsync<OrderItemRow>(
-        "select * from order_items where order_id = ? order by rowid",
-        [order.id]
-      ),
-    }))
+  // Satu query untuk semua item, bukan satu query per order. Bedanya belum
+  // terasa pada sepuluh baris, tapi layar riwayat di langkah 6 akan memuat
+  // ratusan, dan pola N+1 di SQLite perangkat mahal harganya.
+  const items = await db.getAllAsync<OrderItemRow>(
+    `select * from order_items
+     where order_id in (${orders.map(() => "?").join(", ")})
+     order by rowid`,
+    orders.map((o) => o.id)
   );
+
+  const byOrder = new Map<string, OrderItemRow[]>();
+  for (const item of items) {
+    const list = byOrder.get(item.order_id);
+    if (list) list.push(item);
+    else byOrder.set(item.order_id, [item]);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: byOrder.get(order.id) ?? [],
+  }));
 }
 
 // ------------------------------------------------------------------ internal
