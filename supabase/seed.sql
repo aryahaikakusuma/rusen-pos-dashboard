@@ -12,11 +12,20 @@
 --      "K141" (Nasi Goreng Ayam).
 -- Kalau file sumber diperbaiki, sesuaikan kembali ke SKU aslinya.
 --
--- PIN uji coba (hash bcrypt di bawah, plaintext TIDAK pernah masuk database):
---   Budi   123456  kasir
---   Siti   567890  kasir
---   Ahmad  999999  manager
+-- Akun mengikuti pembagian shift di toko, bukan per orang (hash bcrypt di
+-- bawah, plaintext TIDAK pernah masuk database):
+--   Pagi   123456  kasir
+--   Sore   654321  kasir
 --   Owner  000000  owner
+--
+-- Konsekuensi yang disengaja: orders.created_by, paid_by, dan voided_by akan
+-- menunjuk ke shift, bukan ke orang. Selama satu shift dijaga satu orang, itu
+-- setara. Begitu dua orang bergantian dalam shift yang sama, laporan void tidak
+-- lagi bisa menyebut siapa yang membatalkan — dan itulah satu-satunya hal yang
+-- dilacak fitur void. Kalau nanti perlu, tambahkan akun per orang.
+--
+-- Peran keduanya `cashier`. Fungsi yang menuntut manager sengaja tetap harus
+-- lewat akun Owner.
 --
 -- Ganti semua PIN ini sebelum dipakai di outlet sungguhan.
 
@@ -26,9 +35,8 @@ insert into outlets (id, name, address) values
   ('00000000-0000-0000-0000-000000000001', 'Rusen Kopitiam', 'Outlet Utama');
 
 insert into employees (outlet_id, name, pin_hash, role) values
-  ('00000000-0000-0000-0000-000000000001', 'Budi',  '$2b$10$mqWL5jMOE5X8Jg8DPLTWaOkMPMbKsK73Pv24JnQpsKrvm3qBe/Uae', 'cashier'),
-  ('00000000-0000-0000-0000-000000000001', 'Siti',  '$2b$10$9qFdmjNVeYNaTlIoAeW0lOBUVXNZWVPSQkC7jNrzwzoHKTOQmtJsG', 'cashier'),
-  ('00000000-0000-0000-0000-000000000001', 'Ahmad', '$2b$10$BbGhveMp/qAOpuEgJQkA/.Nilf777UFZlvpbj1.c1GWLeVCwmzd3G', 'manager'),
+  ('00000000-0000-0000-0000-000000000001', 'Pagi',  '$2b$10$mqWL5jMOE5X8Jg8DPLTWaOkMPMbKsK73Pv24JnQpsKrvm3qBe/Uae', 'cashier'),
+  ('00000000-0000-0000-0000-000000000001', 'Sore',  '$2b$10$r2kFseKsqWCs93ISuf7TJ.sAqU2Gs1/uzgddHvvxx1EDjoBZRwohe', 'cashier'),
   ('00000000-0000-0000-0000-000000000001', 'Owner', '$2b$10$W80RXCdug/6qy5PWRssqr.j4WMvl.d.bL2OKSMhMgDSye5Pm6oQg2', 'owner');
 
 insert into categories (outlet_id, code, name, sort_order) values
