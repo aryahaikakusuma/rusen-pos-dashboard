@@ -386,6 +386,29 @@ export async function payOrder(
   });
 }
 
+/**
+ * Awalan kode meja yang dipakai layar uji langkah 3. Order sungguhan tidak
+ * pernah memakainya, jadi ini aman jadi penanda data buangan.
+ */
+export const TEST_TABLE_PREFIX = "UJI-";
+
+/**
+ * Hapus order yang dibuat layar uji. Setiap kali uji dijalankan ia membuat
+ * order baru — kalau tidak dibersihkan, daftar order lokal cepat penuh sampah
+ * dan hasil uji berikutnya jadi sulit dibaca.
+ *
+ * order_items, order_item_voids, dan payments ikut terhapus lewat
+ * `on delete cascade` di skema — selama `pragma foreign_keys` menyala, yang
+ * disetel saat migrasi dijalankan.
+ */
+export async function clearTestOrders(db: SQLiteDatabase): Promise<number> {
+  const result = await db.runAsync(
+    "delete from orders where table_code like ?",
+    [`${TEST_TABLE_PREFIX}%`]
+  );
+  return result.changes;
+}
+
 /** Order terbaru beserta itemnya. Dipakai layar uji langkah 3; layar kasir
  *  sungguhan di langkah 5 akan memakai query yang lebih sempit. */
 export async function listRecentOrders(

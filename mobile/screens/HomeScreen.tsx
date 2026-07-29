@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -14,9 +15,11 @@ import { translateOrderError } from "../db/errors";
 import {
   appendToOrder,
   checkTableCode,
+  clearTestOrders,
   createOrder,
   listRecentOrders,
   payOrder,
+  TEST_TABLE_PREFIX,
   voidOrderItem,
 } from "../db/orders";
 import { useAuth } from "../lib/auth-context";
@@ -42,6 +45,11 @@ import {
 export default function HomeScreen() {
   const { session, logout } = useAuth();
   const db = useSQLiteContext();
+  const { height } = useWindowDimensions();
+
+  // Sama seperti layar login: aplikasi dikunci landscape untuk tablet, jadi di
+  // ponsel tingginya sempit dan isi yang ditumpuk vertikal tidak terjangkau.
+  const compact = height < 520;
 
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -94,6 +102,19 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleClearTests() {
+    setBusy(true);
+    try {
+      const removed = await clearTestOrders(db);
+      append(`OK  hapus ${removed} order uji`);
+    } catch (error) {
+      append(`GAGAL hapus data uji: ${(error as Error).message}`);
+    } finally {
+      await refreshOrders();
+      setBusy(false);
+    }
+  }
+
   async function handleSelfTest() {
     if (!session) return;
     setBusy(true);
@@ -107,6 +128,47 @@ export default function HomeScreen() {
       setBusy(false);
     }
   }
+
+  const logPanel = (
+    <View style={styles.panel}>
+      <ScrollView contentContainerStyle={styles.panelInner}>
+        {log.map((line, index) => (
+          <Text
+            key={index}
+            style={[
+              styles.logLine,
+              line.startsWith("GAGAL") && styles.logLineFail,
+            ]}>
+            {line}
+          </Text>
+        ))}
+        {log.length === 0 ? (
+          <Text style={styles.caption}>
+            Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal
+            boleh dijalankan dalam mode pesawat.
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+
+  const orderPanel = (
+    <View style={styles.panel}>
+      <ScrollView contentContainerStyle={styles.panelInner}>
+        {orders.map((o) => (
+          <View key={o.id} style={styles.orderRow}>
+            <Text style={styles.orderLabel}>{o.label}</Text>
+            <Text style={styles.orderMeta}>
+              {o.status} · sync {o.sync}
+            </Text>
+          </View>
+        ))}
+        {orders.length === 0 ? (
+          <Text style={styles.caption}>Belum ada order lokal.</Text>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
@@ -122,8 +184,6 @@ export default function HomeScreen() {
           <Text style={styles.buttonLabel}>Keluar</Text>
         </Pressable>
       </View>
-
-      <Text style={styles.caption}>{catalog}</Text>
 
       <View style={styles.actions}>
         <Pressable
@@ -151,43 +211,38 @@ export default function HomeScreen() {
             Jalankan uji lokal
           </Text>
         </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={handleClearTests}
+          style={({ pressed }) => [
+            styles.button,
+            busy && styles.disabled,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.buttonLabel}>Hapus data uji</Text>
+        </Pressable>
+        {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
       </View>
 
-      {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
+      <Text style={styles.caption}>{catalog}</Text>
 
-      <ScrollView style={styles.logBox} contentContainerStyle={styles.logInner}>
-        {log.map((line, index) => (
-          <Text
-            key={index}
-            style={[
-              styles.logLine,
-              line.startsWith("GAGAL") && styles.logLineFail,
-            ]}>
-            {line}
-          </Text>
-        ))}
-        {log.length === 0 ? (
+      {/* Dua panel bersebelahan saat layar pendek: lebar landscape ponsel
+          justru berlimpah, yang kurang tingginya. Ditumpuk vertikal, panel
+          bawah jadi tak terjangkau. */}
+      <View style={[styles.panels, compact && styles.panelsRow]}>
+        <View style={styles.panelWrap}>
+          <Text style={styles.caption}>Hasil uji</Text>
+          {logPanel}
+        </View>
+        <View style={styles.panelWrap}>
           <Text style={styles.caption}>
-            Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal
-            boleh dijalankan dalam mode pesawat.
+            Order lokal terbaru — semuanya akan tertulis “sync pending” sampai
+            langkah 4 dibangun
           </Text>
-        ) : null}
-      </ScrollView>
-
-      <Text style={styles.caption}>Order lokal terbaru</Text>
-      <ScrollView style={styles.orderBox} contentContainerStyle={styles.logInner}>
-        {orders.map((o) => (
-          <View key={o.id} style={styles.orderRow}>
-            <Text style={styles.orderLabel}>{o.label}</Text>
-            <Text style={styles.orderMeta}>
-              {o.status} · sync {o.sync}
-            </Text>
-          </View>
-        ))}
-        {orders.length === 0 ? (
-          <Text style={styles.caption}>Belum ada order lokal.</Text>
-        ) : null}
-      </ScrollView>
+          {orderPanel}
+        </View>
+      </View>
     </View>
   );
 }
@@ -208,7 +263,9 @@ async function runSelfTest(
     return;
   }
   const [a, b] = products;
-  const tableCode = `UJI-${Date.now().toString().slice(-5)}`;
+  // Awalannya dipakai bersama tombol "Hapus data uji" untuk mengenali order
+  // buangan; order sungguhan tidak pernah memakai kode meja berawalan ini.
+  const tableCode = `${TEST_TABLE_PREFIX}${Date.now().toString().slice(-5)}`;
 
   const check = async (label: string, fn: () => Promise<void>) => {
     try {
@@ -426,7 +483,23 @@ const styles = StyleSheet.create({
   greeting: { ...textStyles.screenTitle, color: semantic.textPrimary },
   role: { ...textStyles.statusBadge, color: semantic.textSecondary },
   caption: { ...textStyles.caption, color: semantic.textSecondary },
-  actions: { flexDirection: "row", gap: spacing.sm },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  panels: { flex: 1, gap: spacing.sm },
+  panelsRow: { flexDirection: "row" },
+  panelWrap: { flex: 1, gap: spacing.xs },
+  panel: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: border.hairline,
+    borderColor: semantic.border,
+    backgroundColor: colors.neutral[0],
+  },
+  panelInner: { padding: spacing.md, gap: spacing.xs },
   button: {
     minHeight: touchTarget.min,
     justifyContent: "center",
@@ -444,21 +517,6 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   buttonLabel: { ...textStyles.bodyStrong, color: semantic.textPrimary },
   buttonPrimaryLabel: { color: colors.neutral[0] },
-  logBox: {
-    flex: 1,
-    borderRadius: radius.md,
-    borderWidth: border.hairline,
-    borderColor: semantic.border,
-    backgroundColor: colors.neutral[0],
-  },
-  orderBox: {
-    maxHeight: 160,
-    borderRadius: radius.md,
-    borderWidth: border.hairline,
-    borderColor: semantic.border,
-    backgroundColor: colors.neutral[0],
-  },
-  logInner: { padding: spacing.md, gap: spacing.xs },
   logLine: { ...textStyles.caption, color: semantic.textPrimary },
   logLineFail: { color: colors.status.void },
   orderRow: { gap: 2 },
