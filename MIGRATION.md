@@ -5,9 +5,9 @@ targeting tablet (primary, cashier station) and phone (secondary, owner reports)
 alongside `AGENTS.md`, `PRODUCT.md`, and `DESIGN.md` — this file covers only what changes
 for the mobile migration, not the product scope itself.
 
-**Status: steps 1-3 built, step 3 not yet verified on device, step 4 next.** Progress and
-corrections are recorded per step below. Where reality contradicted the original plan, the
-correction is stated rather than the plan quietly rewritten.
+**Status: steps 1-3 done and verified on device, step 4 next.** Progress and corrections are
+recorded per step below. Where reality contradicted the original plan, the correction is
+stated rather than the plan quietly rewritten.
 
 ## Why this migration
 
@@ -109,7 +109,7 @@ touches it — it is new product work, not a port, and needs its own decisions (
 automatic on login, or a separate action? can a cashier clock out with unpaid orders open?).
 Explicitly not a priority right now.
 
-## Step 3 — Local database layer ✅ built, ⏳ unverified on device
+## Step 3 — Local database layer ✅
 
 **Library: expo-sqlite**, not WatermelonDB or op-sqlite. Both alternatives are third-party
 native modules, so adopting either would have forced a custom dev build immediately and
@@ -161,9 +161,23 @@ and `client_created_at` already exists).
 `refunds` / `refund_items` were left out: no code in the web app touches them, and they are
 report-side rather than till-side. They belong with step 6.
 
-**Not yet verified.** The schema's constraints and generated columns were tested against a
-real SQLite engine, and typecheck is clean, but the self-test screen has not been run on the
-phone — including the airplane-mode pass that is the entire point of the step.
+**Verified on device.** All eleven self-test checks pass — order creation and totals,
+idempotency, table sequencing, item merging, stale-version rejection, partial and total
+void, payment with change, double-payment idempotency, and short-payment rejection — and
+they pass again **in airplane mode**, which is the one result that mattered. The local layer
+never touches the network.
+
+Two performance defects surfaced only on the device and were fixed: `pullCatalog` wrote one
+statement per row (316 JS-to-native round trips inside one exclusive transaction, which
+reads as a frozen app on a phone) and `listRecentOrders` was N+1. Both were invisible in a
+typecheck and in the SQLite-engine tests — a reminder that this layer's failure mode is
+latency, not exceptions.
+
+The login and self-test screens also had to learn to adapt to short viewports. The app is
+locked to landscape because the target is a cashier tablet, which stays correct — but on a
+phone in landscape the stacked layouts pushed controls off-screen entirely. Both screens now
+split into two columns below 520dp of height, keyed on viewport height rather than device
+detection.
 
 ## Step 4 — Sync engine (next)
 
@@ -210,10 +224,11 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 - **The web app still points at local Docker.** Only the mobile client was repointed.
   Deliberate: repointing the web app is a separate decision about which database is
   authoritative for day-to-day use, and the outlet is currently running on the web build.
-- **On-device verification is outstanding for both step 2 and step 3.** Everything hosted has
-  been verified by direct HTTP — login, the generic-error behaviour, the rate limit, and all
-  five RLS checks. What has never run is the app itself on a phone: login, the catalog pull,
-  and the step 3 self-test in airplane mode.
+- ~~On-device verification outstanding~~ **Resolved.** Login, the catalog pull, and the full
+  step 3 self-test have all run on a phone, the last of them offline.
+- **Tested on a phone, not on the outlet tablet.** Every on-device result so far comes from
+  a personal phone in landscape. The tablet is the real target and has never run this build;
+  `PRODUCT.md`'s three-column cashier layout has never been seen at its intended size.
 - **Seed PINs are live on a public database.** `Pagi 123456`, `Sore 654321`, `Owner 000000`.
   The rate limit blunts the risk, but `000000` on the owner account should not survive to
   opening day.
