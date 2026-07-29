@@ -382,8 +382,15 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+[edge_runtime.secrets]
+# Harus persis sama dengan JWT secret proyek, kalau tidak PostgREST menolak
+# token buatan pin-login. Nilai lokalnya ada di output `supabase status`.
+SESSION_JWT_SECRET = "env(SESSION_JWT_SECRET)"
+
+# Login PIN adalah satu-satunya endpoint yang boleh dipanggil tanpa token —
+# pemanggilnya justru belum punya token.
+[functions.pin-login]
+verify_jwt = false
 
 [analytics]
 enabled = true
