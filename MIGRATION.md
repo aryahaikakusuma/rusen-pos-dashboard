@@ -198,20 +198,25 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 
 ## Open items
 
-- **Supabase is still local, not hosted** — and this is now the blocking item. `SUPABASE_URL`
-  is a LAN address pointing at Docker on the development PC, so the catalog pull only works
-  while that PC is running. Heika decided to stand the hosted project up now rather than at
-  step 4. Needs: the project created, `supabase/migrations/` pushed and seeded,
-  `SESSION_JWT_SECRET` set as a Function secret, and both clients repointed.
-- **JWT signing on a hosted project.** `pin-login` signs HS256 against the legacy JWT
-  secret. A project switched to asymmetric signing keys would reject those tokens, and login
-  would have to move to shadow `auth.users` rows. Check Project Settings → API before
-  migrating — this is the one thing that could force a rewrite rather than a config change.
-- **Cleartext HTTP.** Fine in development; production needs HTTPS, which a hosted Supabase
-  project provides automatically. Resolved by the move above.
-- **On-device verification is outstanding for both step 2 and step 3.** Login has never been
-  exercised on the phone, and neither has the step 3 self-test. Both should be run against
-  the hosted URL so the work isn't repeated.
+- ~~Supabase is local, not hosted~~ **Resolved.** The hosted project is live: all four
+  migrations pushed, seed applied (1 outlet, 3 employees, 23 categories, 293 products),
+  `SESSION_JWT_SECRET` set as a Function secret, `pin-login` deployed. `mobile/.env` points
+  at it over HTTPS, which also closes the cleartext-HTTP item.
+- ~~JWT signing on a hosted project~~ **Resolved, and this was the real risk.** The project
+  uses legacy HS256 keys, confirmed not by inspecting settings but by signing a token with
+  the project secret and watching PostgREST accept it. `pin-login` needed no change. Should
+  the project ever be switched to asymmetric signing keys, login breaks and has to move to
+  shadow `auth.users` rows — so that switch is not a routine setting to flip.
+- **The web app still points at local Docker.** Only the mobile client was repointed.
+  Deliberate: repointing the web app is a separate decision about which database is
+  authoritative for day-to-day use, and the outlet is currently running on the web build.
+- **On-device verification is outstanding for both step 2 and step 3.** Everything hosted has
+  been verified by direct HTTP — login, the generic-error behaviour, the rate limit, and all
+  five RLS checks. What has never run is the app itself on a phone: login, the catalog pull,
+  and the step 3 self-test in airplane mode.
+- **Seed PINs are live on a public database.** `Pagi 123456`, `Sore 654321`, `Owner 000000`.
+  The rate limit blunts the risk, but `000000` on the owner account should not survive to
+  opening day.
 - The root `README.md` is still create-next-app boilerplate.
 
 ## Testing approach
