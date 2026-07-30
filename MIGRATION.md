@@ -395,9 +395,10 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 - **`payments` has no `ON DELETE CASCADE` in Postgres but does in the local SQLite schema.**
   Harmless today — nothing deletes orders in production — but the two schemas differ, and
   the divergence surfaced while cleaning up a test order by hand.
-- **Seed PINs are live on a public database.** `Pagi 123456`, `Sore 654321`, `Owner 000000`.
-  The rate limit blunts the risk, but `000000` on the owner account should not survive to
-  opening day.
+- **Seed PINs are live on a public database.** `Pagi 123456`, `Sore 654321`. The owner PIN is
+  no longer `000000` — Heika chose a replacement and `seed.sql` carries its bcrypt hash, so
+  the plaintext is not in the repo. The two cashier PINs are still sequential digits, which
+  the rate limit blunts but does not fix; they should change before opening day too.
 - The root `README.md` is still create-next-app boilerplate.
 
 ## Testing approach

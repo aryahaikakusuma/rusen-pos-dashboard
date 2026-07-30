@@ -16,7 +16,7 @@
 -- bawah, plaintext TIDAK pernah masuk database):
 --   Pagi   123456  kasir
 --   Sore   654321  kasir
---   Owner  000000  owner
+--   Owner  (PIN diganti pemilik; plaintext sengaja tidak ditulis di sini)  owner
 --
 -- Konsekuensi yang disengaja: orders.created_by, paid_by, dan voided_by akan
 -- menunjuk ke shift, bukan ke orang. Selama satu shift dijaga satu orang, itu
@@ -37,7 +37,7 @@ insert into outlets (id, name, address) values
 insert into employees (outlet_id, name, pin_hash, role) values
   ('00000000-0000-0000-0000-000000000001', 'Pagi',  '$2b$10$mqWL5jMOE5X8Jg8DPLTWaOkMPMbKsK73Pv24JnQpsKrvm3qBe/Uae', 'cashier'),
   ('00000000-0000-0000-0000-000000000001', 'Sore',  '$2b$10$r2kFseKsqWCs93ISuf7TJ.sAqU2Gs1/uzgddHvvxx1EDjoBZRwohe', 'cashier'),
-  ('00000000-0000-0000-0000-000000000001', 'Owner', '$2b$10$W80RXCdug/6qy5PWRssqr.j4WMvl.d.bL2OKSMhMgDSye5Pm6oQg2', 'owner');
+  ('00000000-0000-0000-0000-000000000001', 'Owner', '$2b$10$OGm53hMvN33t9ZqKZTignugMDGCwtzxWnuM5iWo2rh5ImR8CFemyu', 'owner');
 
 insert into categories (outlet_id, code, name, sort_order) values
   ('00000000-0000-0000-0000-000000000001', 'KOPI'   , 'Kopi'                          ,  1),
