@@ -243,19 +243,20 @@ grid filling the rest, and the cart as a bottom bar that opens into a full-heigh
 cart is a sheet rather than a permanent panel because a permanent one would leave the grid
 two rows tall. Landscape still gets the three columns from `DESIGN.md`.
 
-**Varian suhu digabung jadi satu kartu.** Panas dan dingin tetap dua produk terpisah di
-database — kode dan harga sendiri-sendiri, dan laporan memang perlu membedakannya — tapi di
-grid keduanya jadi satu kartu, dan suhunya ditanyakan setelah kartu ditekan. Logikanya
-disalin dari `lib/product-variants.ts` milik web, bukan ditulis ulang: penanda suhunya tidak
-seragam (kategori Kopi memakai akhiran "S" untuk dingin dan tanpa akhiran untuk panas), dan
-implementasi yang menganggap hanya ada "Panas"/"Dingin" gagal menggabungkan delapan kartu
-kategori Kopi tanpa memunculkan satu pun error. Kedua berkas itu sekarang harus berubah
-bersama, sama seperti `db/orders.ts` dengan RPC Postgres.
+**Hot and cold variants are merged into a single card.** Panas and dingin remain two
+separate products in the database — their own codes and prices, and reports still need to
+tell them apart — but in the grid they collapse into one card, with temperature asked after
+the card is tapped. The logic is copied from the web's `lib/product-variants.ts`, not
+rewritten: the temperature marker is not uniform (the Kopi category uses a trailing "S" for
+cold and no suffix for hot), and an implementation that assumed only "Panas"/"Dingin" exist
+failed to merge eight Kopi cards without raising a single error. The two files now have to
+change together, the same way `db/orders.ts` does with the Postgres RPCs.
 
-Konsekuensinya, **kode produk hilang dari kartu** — satu kartu gabungan punya dua kode.
-Ini menyimpang dari `DESIGN.md`, yang membesarkan kode karena kasir membacanya lebih dulu.
-Diambil sadar: kolom pencarian tetap menyapu kode, dan mencari lewat kode selalu
-menghasilkan satu produk sehingga langsung masuk keranjang tanpa lembar suhu.
+The consequence is that **the product code disappears from the card** — one merged card
+carries two codes. This departs from `DESIGN.md`, which enlarged the code because the
+cashier reads it first. Taken knowingly: the search field still sweeps codes, and searching
+by code always resolves to a single product, so it goes straight into the cart without the
+temperature sheet.
 
 Both layouts share every component in `mobile/components/`, so neither is the "real" one
 with the other bolted on. The one width threshold lives in `theme/layout.ts` and is read

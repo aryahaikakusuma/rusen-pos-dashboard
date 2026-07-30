@@ -33,19 +33,19 @@ To verify it, log in, tap **Tarik katalog** once while online, then **Jalankan u
 the self-test exercises the full order lifecycle and every rejection path. Re-run it in
 airplane mode: the local layer must not touch the network at all.
 
-## Varian suhu (`lib/product-variants.ts`)
+## Temperature variants (`lib/product-variants.ts`)
 
-Salinan `lib/product-variants.ts` milik aplikasi web, bukan implementasi terpisah. Panas dan
-dingin tetap dua produk di database; penggabungan hanya terjadi di layar, dan `productId`
-yang masuk keranjang selalu produk aslinya.
+A copy of the web app's `lib/product-variants.ts`, not a separate implementation. Hot and
+cold remain two products in the database; the merge happens only on screen, and the
+`productId` that lands in the cart is always the real one.
 
-Penanda suhu di menu tidak seragam — kategori Kopi memakai akhiran "S" untuk dingin dan
-tanpa akhiran untuk panas, sisanya memakai "Panas"/"Dingin". Baca komentar di berkas
-sumbernya sebelum mengubah apa pun di sini, dan ubah kedua berkas bersamaan.
+The temperature marker in the menu is not uniform — the Kopi category uses a trailing "S"
+for cold and no suffix for hot, the rest use "Panas"/"Dingin". Read the comments in the
+source file before changing anything here, and change both files together.
 
-Verifikasinya ada di layar **Uji** → **Uji pengelompokan varian**: 255 kartu, 38 di
-antaranya berpasangan. Kalau angka itu berubah tanpa katalog berubah, aturan akhirannya
-rusak.
+Verification lives in the **Uji** screen → **Uji pengelompokan varian**: 255 cards, 38 of
+them paired. If that number changes without the catalog changing, the suffix rule is
+broken.
 
 ## Auth — and why the backend had to change
 
