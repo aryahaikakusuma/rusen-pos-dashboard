@@ -42,6 +42,8 @@ function Shell() {
   const [debug, setDebug] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
 
+  const isOwner = session?.role === "owner";
+
   const bumpOrders = useCallback(() => {
     setRefreshToken((n) => n + 1);
   }, []);
@@ -92,10 +94,17 @@ function Shell() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Buka layar uji"
+          accessibilityLabel={
+            // Layar yang sama, isi berbeda menurut peran: owner dapat alat uji,
+            // peran lain hanya penarikan katalog. Labelnya ikut menyesuaikan —
+            // tombol "Uji" yang membuka layar berjudul "Katalog" membingungkan.
+            isOwner ? "Buka layar uji" : "Buka layar katalog"
+          }
           onPress={() => setDebug(true)}
           style={styles.headerButton}>
-          <Text style={styles.headerButtonLabel}>Uji</Text>
+          <Text style={styles.headerButtonLabel}>
+            {isOwner ? "Uji" : "Katalog"}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"

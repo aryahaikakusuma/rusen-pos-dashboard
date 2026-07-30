@@ -47,6 +47,18 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
   const { session } = useAuth();
   const db = useSQLiteContext();
 
+  /**
+   * Alat uji hanya untuk owner. Menarik katalog tetap terbuka untuk semua peran
+   * karena itu bukan pengujian — tanpa katalog, kasir tidak punya produk sama
+   * sekali dan aplikasinya tidak bisa dipakai.
+   *
+   * Ini pagar tampilan, bukan pagar keamanan, dan memang cukup di sini: semua
+   * aksi di layar ini hanya menyentuh SQLite di perangkat, tidak ada satu pun
+   * yang menulis ke server. Kalau nanti ada aksi yang menyentuh data outlet,
+   * pagar sungguhan harus dipasang di RLS, bukan di sini.
+   */
+  const isOwner = session?.role === "owner";
+
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [catalog, setCatalog] = useState("Katalog belum pernah ditarik.");
@@ -123,7 +135,9 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Uji lapisan lokal</Text>
+        <Text style={styles.title}>
+          {isOwner ? "Uji lapisan lokal" : "Katalog"}
+        </Text>
         <Button label="Tutup" onPress={onClose} style={styles.close} />
       </View>
 
@@ -132,30 +146,37 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
       <View style={styles.actions}>
         <Button
           label="Tarik katalog"
+          // Tanpa alat uji di sekitarnya, menarik katalog adalah satu-satunya
+          // tindakan di layar ini — jadi ia yang jadi aksi utama.
+          variant={isOwner ? "secondary" : "primary"}
           disabled={busy}
           onPress={() => void handlePull()}
           style={styles.action}
         />
-        <Button
-          label="Jalankan uji lokal"
-          variant="primary"
-          disabled={busy}
-          onPress={() => void handleSelfTest()}
-          style={styles.action}
-        />
-        <Button
-          label="Hapus data uji"
-          disabled={busy}
-          onPress={() => void handleClearTests()}
-          style={styles.action}
-        />
-        <Button
-          label="Uji pengelompokan varian"
-          variant="secondary"
-          disabled={busy}
-          onPress={() => void handleVariantChecks()}
-          style={styles.action}
-        />
+        {isOwner ? (
+          <>
+            <Button
+              label="Jalankan uji lokal"
+              variant="primary"
+              disabled={busy}
+              onPress={() => void handleSelfTest()}
+              style={styles.action}
+            />
+            <Button
+              label="Hapus data uji"
+              disabled={busy}
+              onPress={() => void handleClearTests()}
+              style={styles.action}
+            />
+            <Button
+              label="Uji pengelompokan varian"
+              variant="secondary"
+              disabled={busy}
+              onPress={() => void handleVariantChecks()}
+              style={styles.action}
+            />
+          </>
+        ) : null}
         {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
       </View>
 
@@ -173,8 +194,9 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
           ))}
           {log.length === 0 ? (
             <Text style={styles.caption}>
-              Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal
-              boleh dijalankan dalam mode pesawat.
+              {isOwner
+                ? "Belum ada hasil. Tarik katalog sekali saat online, lalu uji lokal boleh dijalankan dalam mode pesawat."
+                : "Tarik katalog sekali saat online supaya daftar produk tersedia. Setelah itu kasir bisa bekerja tanpa koneksi."}
             </Text>
           ) : null}
         </ScrollView>
