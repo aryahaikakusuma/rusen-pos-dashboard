@@ -5,8 +5,10 @@ targeting tablet (primary, cashier station) and phone (secondary, owner reports)
 alongside `AGENTS.md`, `PRODUCT.md`, and `DESIGN.md` — this file covers only what changes
 for the mobile migration, not the product scope itself.
 
-**Status: steps 1-3 verified on device. Steps 4-5 built and verified server-side; the phone
-layout has not yet been run on a device.** Progress and corrections are
+**Status: steps 1-3 verified on device. Step 5's phone layout has now run on a device and is
+partly verified — the layout and the merged variant cards were seen and corrected there; the
+step 4 push queue and the offline run have not been re-exercised since.** Progress and
+corrections are
 recorded per step below. Where reality contradicted the original plan, the correction is
 stated rather than the plan quietly rewritten.
 
@@ -275,8 +277,20 @@ grows. `react-native-safe-area-context` was added — bundled in Expo Go, so `st
 unaffected.
 
 **The step 3 self-test was not deleted.** It moved to `screens/DebugScreen.tsx`, reachable
-from the "Uji" button in the header. It is the only regression suite this project has, and
-step 4 touches the same tables.
+from the header button. It is the only regression suite this project has, and step 4 touches
+the same tables. The test actions are now shown only to the owner; cashiers and managers see
+the same screen with the catalog pull alone, since that one is part of normal work. This is
+a display gate, not a security boundary — it holds only because every action there writes to
+local SQLite and nothing else. Anything that touches outlet data has to be gated in RLS.
+
+**Three layout defects appeared only on the device**, each invisible to a typecheck and each
+a Yoga flexbox semantic rather than a styling mistake. The login keypad wrapped to two
+columns because `minWidth: 88` did not fit the 279dp of usable card width on a 375dp screen.
+The login card collapsed onto itself and its children overlapped because `flex: 1` implies
+`flexBasis: 0`, so a column child reports zero height to an auto-height parent. The category
+chips rendered 214dp tall because a horizontal `ScrollView` stretches its content on the
+cross axis by default. The pattern is worth naming: on this layer, `flex: 1` and default
+cross-axis alignment are the two things that read as harmless and are not.
 
 No "Cetak Struk" button anywhere — the printer is step 7, and a button that silently does
 nothing is worse than an absent one.
@@ -317,10 +331,16 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 - **Tested on a phone, not on the outlet tablet.** The phone is now the primary target and
   the tablet the secondary, so this matters less than it did — but the three-column layout
   still exists in code and has only ever been seen on a rotated phone, never at tablet size.
-- **The steps 4-5 UI has not run on a device yet.** Everything so far is a clean typecheck,
-  a clean `expo-doctor`, and nine server-side checks against the hosted database. The step 3
-  lesson stands: this layer's failure mode is latency and layout, and neither shows up in a
-  typecheck.
+- ~~The steps 4-5 UI has not run on a device~~ **Partly resolved.** The portrait cashier
+  layout, the login screen, the category strip, and the merged variant cards have all been
+  seen on a phone, and three layout defects were found and fixed there that no typecheck
+  could have caught. Still unverified on device: the step 4 unsent badge and manual push,
+  the repeat-push no-op, the offline run, and the three-column landscape layout.
+- **The LAN path from phone to laptop does not work on this network.** Metro binds
+  correctly and the firewall allows it; the phone simply cannot reach `192.168.100.4:8081`,
+  almost certainly router client isolation. Device testing runs over
+  `adb reverse tcp:8081 tcp:8081` on USB instead, which bypasses the network entirely.
+  Worth knowing before anyone spends another hour on firewall rules.
 - **`payments` has no `ON DELETE CASCADE` in Postgres but does in the local SQLite schema.**
   Harmless today — nothing deletes orders in production — but the two schemas differ, and
   the divergence surfaced while cleaning up a test order by hand.
