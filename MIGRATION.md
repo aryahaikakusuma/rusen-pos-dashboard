@@ -7,7 +7,8 @@ for the mobile migration, not the product scope itself.
 
 **Status: steps 1-3 verified on device. Step 5's phone layout has now run on a device and is
 partly verified — the layout and the merged variant cards were seen and corrected there; the
-step 4 push queue and the offline run have not been re-exercised since.** Progress and
+step 4 push queue and the offline run have not been re-exercised since. The landscape
+three-column layout has now run on a rotated phone as well.** Progress and
 corrections are
 recorded per step below. Where reality contradicted the original plan, the correction is
 stated rather than the plan quietly rewritten.
@@ -292,6 +293,29 @@ chips rendered 214dp tall because a horizontal `ScrollView` stretches its conten
 cross axis by default. The pattern is worth naming: on this layer, `flex: 1` and default
 cross-axis alignment are the two things that read as harmless and are not.
 
+**The landscape three-column layout ran on a device for the first time, and one width
+threshold turned out to be answering two questions.** A phone rotated sideways gives
+834×375dp. The width is genuinely enough for three columns, so `breakpoints.wide` was right;
+what it could not know is that the height had collapsed to 375dp while every piece of app
+chrome was still sized for a portrait screen. The header and tab bar alone took a third of
+it. The cart column then overflowed its own bounds — its children had no `flexShrink`, and
+because React Native defaults `overflow` to `visible`, the buttons that were pushed out were
+drawn on top of the tab bar rather than clipped. Two fixes, of different kinds: the cart body
+is now wrapped in a `flex: 1` view with `overflow: "hidden"` on the column as a backstop, and
+a second threshold, `breakpoints.short` (520dp) with a `useShortViewport()` hook, tightens
+the chrome without touching the column count. How many columns and how loose the frame are
+two decisions, and one number cannot carry both.
+
+**The top bar was replaced by a menu button.** Employee name, role, Katalog/Uji and Keluar
+are read once at the start of a shift and then never touched, yet the row holding them cost
+~44dp all day — on a 375dp screen that is the difference between one row of product cards and
+two. They now live in a `Sheet` opened by a three-line button sitting to the left of the
+product search, with a second copy of the button in the Orders tab, which would otherwise
+have no route to Keluar. The icon is three `View`s rather than an icon library: the project
+has none, and a single button does not justify adding one. This applies in both orientations
+on purpose — a control that moves between portrait and landscape is worse for someone who has
+memorised where it lives than a slightly taller portrait screen is.
+
 No "Cetak Struk" button anywhere — the printer is step 7, and a button that silently does
 nothing is worse than an absent one.
 
@@ -336,8 +360,10 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
   seen on a phone, and three layout defects were found and fixed there that no typecheck
   could have caught. The step 4 queue has now run too: an order created offline showed the
   unsent badge, stayed at one order after being paid offline rather than becoming two, and
-  the badge cleared on the manual push. Still unverified on device: the three-column
-  landscape layout.
+  the badge cleared on the manual push. The three-column landscape layout has now run too,
+  on a rotated phone, and it was broken in two ways a typecheck could not see — see step 5.
+  Still unverified in landscape: the full cart → pending → paid flow, and the Orders and
+  Edit Order screens.
 - **Three test orders sit on the hosted database and will show up in sales reports.**
   Table codes `A3` (Rp 50.000), `Z9` (Rp 29.000), and `ZZ` (Rp 1.000, id
   `200f18fa-0514-4705-954a-936284f5d7f5`, the idempotency probe). They have to be deleted

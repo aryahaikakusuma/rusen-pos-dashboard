@@ -61,11 +61,17 @@ function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
 
       <View style={styles.footer}>
         <Text style={styles.price}>{price}</Text>
+        {/* Kartu tanpa penanda tetap menyisakan ruang setinggi penanda. Tanpa
+            ini harganya turun ke dasar kartu sementara harga di kartu
+            bersebelahan yang berpenanda duduk lebih tinggi, dan barisnya
+            terlihat tidak rata. */}
         {hasVariants ? (
           <View style={styles.variantTag}>
             <Text style={styles.variantTagLabel}>Panas/Dingin</Text>
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.variantTagSpacer} />
+        )}
       </View>
     </Pressable>
   );
@@ -77,6 +83,12 @@ function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
  * merender ulang seluruh grid.
  */
 export default memo(ProductCardBase);
+
+/**
+ * Tinggi tetap, bukan hasil padding, supaya penanda dan ruang penggantinya
+ * dijamin sama tinggi tanpa bergantung pada metrik font.
+ */
+const VARIANT_TAG_HEIGHT = 20;
 
 const styles = StyleSheet.create({
   card: {
@@ -110,10 +122,14 @@ const styles = StyleSheet.create({
   },
   variantTag: {
     alignSelf: "flex-start",
+    height: VARIANT_TAG_HEIGHT,
+    justifyContent: "center",
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
     borderRadius: radius.sm,
     backgroundColor: colors.primary[50],
+  },
+  variantTagSpacer: {
+    height: VARIANT_TAG_HEIGHT,
   },
   variantTagLabel: {
     ...textStyles.statusBadge,

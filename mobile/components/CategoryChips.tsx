@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
 
 import type { CategoryRow } from "../db/types";
-import { useLayoutMode } from "../lib/use-layout-mode";
+import { useLayoutMode, useShortViewport } from "../lib/use-layout-mode";
 import {
   cashierLayout,
   radius,
@@ -33,6 +33,7 @@ export default function CategoryChips({
 }: CategoryChipsProps) {
   const mode = useLayoutMode();
   const vertical = mode === "tablet";
+  const short = useShortViewport();
 
   const items = categories.map((category) => {
     const active = category.id === selectedId;
@@ -59,7 +60,7 @@ export default function CategoryChips({
 
   if (vertical) {
     return (
-      <View style={styles.sidebar}>
+      <View style={[styles.sidebar, short && styles.sidebarShort]}>
         <ScrollView contentContainerStyle={styles.sidebarContent}>
           {items}
         </ScrollView>
@@ -85,6 +86,9 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: semantic.border,
     backgroundColor: semantic.surfaceMuted,
+  },
+  sidebarShort: {
+    width: cashierLayout.sidebarWidthShort,
   },
   sidebarContent: {
     padding: spacing.sm,

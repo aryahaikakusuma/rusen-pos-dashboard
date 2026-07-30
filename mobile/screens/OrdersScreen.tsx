@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
 
 import Button from "../components/Button";
+import MenuButton from "../components/MenuButton";
 import PaymentSheet from "../components/PaymentSheet";
 import StatusBadge from "../components/StatusBadge";
 import SyncBadge from "../components/SyncBadge";
@@ -23,14 +24,24 @@ import {
   semantic,
   spacing,
   textStyles,
+  touchTarget,
 } from "../theme";
 
 type OrderWithItems = OrderRow & { items: OrderItemRow[] };
+
+/**
+ * "Daftar" adalah pekerjaan yang belum selesai, "Histori" yang sudah lewat.
+ * Pembagiannya menurut status, bukan menurut waktu: order pending yang dibuat
+ * pagi tetap pekerjaan hari ini sampai dibayar.
+ */
+type OrderView = "daftar" | "histori";
 
 interface OrdersScreenProps {
   /** Berubah nilainya tiap kali layar kasir menyimpan order. */
   refreshToken: number;
   onEdit: (orderId: string) => void;
+  /** Membuka lembar menu milik AppShell — nama kasir, Katalog/Uji, Keluar. */
+  onOpenMenu: () => void;
 }
 
 /**
@@ -43,6 +54,7 @@ interface OrdersScreenProps {
 export default function OrdersScreen({
   refreshToken,
   onEdit,
+  onOpenMenu,
 }: OrdersScreenProps) {
   const db = useSQLiteContext();
   const toast = useToast();
@@ -54,6 +66,17 @@ export default function OrdersScreen({
   const [paying, setPaying] = useState<OrderWithItems | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState("");
+  const [view, setView] = useState<OrderView>("daftar");
+
+  const daftar = useMemo(
+    () => orders.filter((order) => order.status === "pending"),
+    [orders]
+  );
+  const histori = useMemo(
+    () => orders.filter((order) => order.status !== "pending"),
+    [orders]
+  );
+  const visible = view === "daftar" ? daftar : histori;
 
   const refresh = useCallback(async () => {
     const [rows, pending] = await Promise.all([
@@ -128,6 +151,7 @@ export default function OrdersScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.bar}>
+        <MenuButton onPress={onOpenMenu} />
         <SyncBadge
           unsent={unsent}
           busy={pushing}
@@ -135,13 +159,30 @@ export default function OrdersScreen({
         />
       </View>
 
+      <View style={styles.segments}>
+        <Segment
+          label="Daftar"
+          count={daftar.length}
+          active={view === "daftar"}
+          onPress={() => setView("daftar")}
+        />
+        <Segment
+          label="Histori"
+          count={histori.length}
+          active={view === "histori"}
+          onPress={() => setView("histori")}
+        />
+      </View>
+
       <FlatList
-        data={orders}
+        data={visible}
         keyExtractor={(order) => order.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Belum ada order. Buka tab Kasir untuk membuat yang pertama.
+            {view === "daftar"
+              ? "Tidak ada order yang menunggu pelunasan."
+              : "Belum ada order yang selesai."}
           </Text>
         }
         renderItem={({ item: order }) => {
@@ -210,6 +251,39 @@ export default function OrdersScreen({
   );
 }
 
+/**
+ * Jumlahnya ikut ditampilkan karena "berapa meja yang masih menunggu" adalah
+ * pertanyaan yang dijawab sekilas, tanpa perlu membuka tabnya dan menghitung.
+ */
+function Segment({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}, ${count} order`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.segment,
+        active && styles.segmentActive,
+        pressed && !active && styles.segmentPressed,
+      ]}>
+      <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+        {label} ({count})
+      </Text>
+    </Pressable>
+  );
+}
+
 const shortTime = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { timeStyle: "short" }).format(
     new Date(iso)
@@ -221,8 +295,43 @@ const styles = StyleSheet.create({
     backgroundColor: semantic.surfaceMuted,
   },
   bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  segments: {
+    flexDirection: "row",
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+  },
+  segment: {
+    flex: 1,
+    minHeight: touchTarget.min,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: semantic.border,
+    backgroundColor: semantic.surface,
+  },
+  // Neutral gelap, bukan biru: biru disimpan untuk satu tombol aksi utama
+  // (DESIGN.md), dan segmen terpilih bukan tombol yang harus ditekan.
+  segmentActive: {
+    backgroundColor: semantic.sidebarActive,
+    borderColor: semantic.sidebarActive,
+  },
+  segmentPressed: {
+    backgroundColor: semantic.surfaceMuted,
+  },
+  segmentLabel: {
+    ...textStyles.bodyStrong,
+    color: semantic.textSecondary,
+  },
+  segmentLabelActive: {
+    color: semantic.sidebarActiveText,
   },
   list: {
     padding: spacing.md,

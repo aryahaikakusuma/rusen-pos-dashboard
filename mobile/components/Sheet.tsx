@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLayoutMode } from "../lib/use-layout-mode";
 import {
@@ -17,6 +18,12 @@ interface SheetProps {
   children: ReactNode;
   /** Kaki tetap: tombol aksi yang tidak boleh ikut tergulung. */
   footer?: ReactNode;
+  /**
+   * Sisi tempat lembar menempel di ponsel. Bawah adalah bawaannya — paling
+   * dekat dengan jempol. Pakai "top" kalau isinya punya kolom ketik: papan
+   * ketik naik dari bawah dan menutupi lembar yang berlabuh di sana.
+   */
+  anchor?: "bottom" | "top";
 }
 
 /**
@@ -34,18 +41,36 @@ export default function Sheet({
   onClose,
   children,
   footer,
+  anchor = "bottom",
 }: SheetProps) {
   const phone = useLayoutMode() === "phone";
+  const top = phone && anchor === "top";
+  // statusBarTranslucent membuat modal ikut menutupi batang status, jadi
+  // lembar yang berlabuh di atas harus menyisakan tingginya sendiri.
+  const insets = useSafeAreaInsets();
 
   return (
     <Modal
       visible
       transparent
-      animationType={phone ? "slide" : "fade"}
+      // animationType="slide" selalu masuk dari bawah. Untuk lembar yang
+      // berlabuh di atas itu berarti terbang melintasi layar, jadi dipudarkan.
+      animationType={phone && !top ? "slide" : "fade"}
       onRequestClose={onClose}
       statusBarTranslucent>
-      <View style={[styles.backdrop, phone && styles.backdropPhone]}>
-        <View style={[styles.panel, phone ? styles.panelPhone : styles.panelWide]}>
+      <View
+        style={[
+          styles.backdrop,
+          phone && styles.backdropPhone,
+          top && styles.backdropTop,
+          top && { paddingTop: insets.top },
+        ]}>
+        <View
+          style={[
+            styles.panel,
+            phone ? styles.panelPhone : styles.panelWide,
+            top && styles.panelTop,
+          ]}>
           <View style={styles.header}>
             <View style={styles.headerText}>
               <Text style={styles.title}>{title}</Text>
@@ -83,6 +108,9 @@ const styles = StyleSheet.create({
     padding: 0,
     justifyContent: "flex-end",
   },
+  backdropTop: {
+    justifyContent: "flex-start",
+  },
   panel: {
     backgroundColor: semantic.surface,
     overflow: "hidden",
@@ -100,6 +128,14 @@ const styles = StyleSheet.create({
     maxHeight: "92%",
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+  },
+  // Sudut tumpul berpindah ke sisi yang menghadap layar, supaya lembar tetap
+  // terbaca sebagai sesuatu yang menempel di tepi dan bukan kartu melayang.
+  panelTop: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
   },
   header: {
     flexDirection: "row",

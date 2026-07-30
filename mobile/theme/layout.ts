@@ -37,12 +37,26 @@ export const touchTarget = {
  */
 export const breakpoints = {
   wide: 700,
+  /**
+   * Ambang tinggi. Ponsel yang diputar mendatar cukup lebar untuk tiga kolom
+   * tapi hanya menyisakan ~375dp ke bawah — batang kepala dan batang tab
+   * berukuran tegak memakan sepertiganya. Di bawah ambang ini kerangka
+   * aplikasi dirapatkan; isinya tidak diubah.
+   */
+  short: 520,
 } as const;
 
 /** Cashier screen is a fixed three-column layout in landscape (DESIGN.md). */
 export const cashierLayout = {
   sidebarWidth: 200,
   cartWidth: 340,
+  /**
+   * Lebar untuk ponsel mendatar. Ukuran tablet menyisakan hanya ~294dp untuk
+   * grid tiga kolom di layar selebar 834dp — kartunya jadi ~85dp dan harga
+   * "Rp 15.000" pecah dua baris. Yang dipangkas kolom yang isinya pendek.
+   */
+  sidebarWidthShort: 150,
+  cartWidthShort: 250,
   productGridColumns: 3,
   productCardMinHeight: 104,
   /** Tegak: dua kolom. Tiga kolom di ~400dp membuat kode produk tak terbaca. */

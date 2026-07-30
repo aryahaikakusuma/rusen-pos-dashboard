@@ -5,12 +5,15 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
 
 import Button from "../components/Button";
 import CartLines from "../components/CartLines";
 import CategoryChips from "../components/CategoryChips";
+import MenuButton from "../components/MenuButton";
 import ProductGrid from "../components/ProductGrid";
 import Sheet from "../components/Sheet";
 import TableConflictDialog from "../components/TableConflictDialog";
@@ -28,7 +31,7 @@ import type {
 import { useAuth } from "../lib/auth-context";
 import type { ProductEntry } from "../lib/product-variants";
 import { formatRupiah, type DraftItem } from "../lib/types";
-import { useLayoutMode } from "../lib/use-layout-mode";
+import { useLayoutMode, useShortViewport } from "../lib/use-layout-mode";
 import {
   cashierLayout,
   colors,
@@ -51,14 +54,18 @@ import {
  */
 export default function CashierScreen({
   onSaved,
+  onOpenMenu,
 }: {
   /** Dipanggil setelah order tersimpan, supaya daftar order ikut segar. */
   onSaved: () => void;
+  /** Membuka lembar menu milik AppShell — nama kasir, Katalog/Uji, Keluar. */
+  onOpenMenu: () => void;
 }) {
   const db = useSQLiteContext();
   const toast = useToast();
   const { session } = useAuth();
   const phone = useLayoutMode() === "phone";
+  const short = useShortViewport();
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -269,13 +276,17 @@ export default function CashierScreen({
   };
 
   const controls = (
-    <View style={styles.controls}>
+    <View style={[styles.controls, short && styles.controlsShort]}>
+      <MenuButton onPress={onOpenMenu} />
       <TextInput
         value={search}
         onChangeText={setSearch}
-        placeholder="Cari nama atau kode produk"
+        // Petunjuknya dipendekkan karena kolomnya kini berbagi satu baris:
+        // teks panjang terpotong di tengah kata dan justru tidak terbaca.
+        placeholder="Cari produk"
+        accessibilityLabel="Cari nama atau kode produk"
         placeholderTextColor={semantic.textSecondary}
-        style={styles.input}
+        style={[styles.input, short && styles.inputShort, styles.searchInput]}
         editable={!saving}
       />
       <TextInput
@@ -284,9 +295,10 @@ export default function CashierScreen({
           setTableCode(text);
           setError("");
         }}
-        placeholder="Kode meja — contoh: A3"
+        placeholder="Kode meja"
+        accessibilityLabel="Kode meja atau order, contoh A3"
         placeholderTextColor={semantic.textSecondary}
-        style={[styles.input, styles.tableInput]}
+        style={[styles.input, short && styles.inputShort, styles.tableInput]}
         editable={!saving}
         autoCapitalize="characters"
       />
@@ -317,25 +329,34 @@ export default function CashierScreen({
     />
   );
 
-  const cartFooter = (
-    <>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <Button
-        label="Simpan Order"
-        loadingLabel="Menyimpan…"
-        variant="primary"
-        loading={saving}
-        disabled={items.length === 0}
-        onPress={() => void handleSave()}
-      />
-      <Button
-        label="Kosongkan Keranjang"
-        variant="danger"
-        disabled={saving || items.length === 0}
-        onPress={resetCart}
-      />
-    </>
+  // Dua tombol yang sama dipakai dua kali dengan bentuk berbeda: menumpuk di
+  // lembar ponsel, berdampingan di kaki panel tablet. Gayanya jadi parameter
+  // supaya isinya tidak perlu ditulis dua kali.
+  const saveButton = (style?: StyleProp<ViewStyle>) => (
+    <Button
+      label="Simpan Order"
+      loadingLabel="Menyimpan…"
+      variant="primary"
+      loading={saving}
+      disabled={items.length === 0}
+      onPress={() => void handleSave()}
+      style={style}
+    />
   );
+
+  const clearButton = (label: string, style?: StyleProp<ViewStyle>) => (
+    <Button
+      label={label}
+      variant="danger"
+      disabled={saving || items.length === 0}
+      onPress={resetCart}
+      style={style}
+    />
+  );
+
+  const errorLine = error ? (
+    <Text style={styles.errorText}>{error}</Text>
+  ) : null;
 
   return (
     <View style={styles.screen}>
@@ -379,7 +400,13 @@ export default function CashierScreen({
               title="Keranjang"
               subtitle={`${itemCount} item · ${formatRupiah(total)}`}
               onClose={() => setCartOpen(false)}
-              footer={cartFooter}>
+              footer={
+                <>
+                  {errorLine}
+                  {saveButton()}
+                  {clearButton("Kosongkan Keranjang")}
+                </>
+              }>
               {cartBody}
             </Sheet>
           ) : null}
@@ -398,13 +425,28 @@ export default function CashierScreen({
             {controls}
             {grid}
           </View>
-          <View style={styles.wideCart}>
+          <View style={[styles.wideCart, short && styles.wideCartShort]}>
             <View style={styles.wideCartHeader}>
               <Text style={styles.wideCartTitle}>Keranjang</Text>
               <Text style={styles.wideCartTotal}>{formatRupiah(total)}</Text>
             </View>
-            {cartBody}
-            <View style={styles.wideCartFooter}>{cartFooter}</View>
+            {/* Pembungkus ber-flex, bukan CartLines langsung. Tanpa ini daftar
+                item memakai tinggi aslinya dan kaki panel terdorong keluar
+                kolom — di ponsel mendatar ia menimpa batang tab. */}
+            <View style={styles.wideCartBody}>{cartBody}</View>
+            <View style={styles.wideCartFooter}>
+              {errorLine}
+              {/* Berdampingan, bukan bertumpuk: dua tombol menumpuk memakan
+                  ~150dp dari kolom setinggi ~230dp dan tidak menyisakan
+                  ruang untuk satu baris item pun. */}
+              <View style={styles.wideCartActions}>
+                {saveButton(styles.wideCartAction)}
+                {/* Satu kata pendek: kaki panel selebar 250dp memecah bahkan
+                    "Kosongkan" di tengah kata, dan judul kolom di atasnya
+                    sudah menyebut "Keranjang". */}
+                {clearButton("Hapus", styles.wideCartAction)}
+              </View>
+            </View>
           </View>
         </View>
       )}
@@ -440,6 +482,8 @@ const styles = StyleSheet.create({
     backgroundColor: semantic.surfaceMuted,
   },
   controls: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
     backgroundColor: semantic.surface,
@@ -456,8 +500,22 @@ const styles = StyleSheet.create({
     color: semantic.textPrimary,
     backgroundColor: semantic.surface,
   },
+  controlsShort: {
+    padding: spacing.sm,
+  },
+  // Tetap di ambang sentuh 48dp DESIGN.md, hanya kehilangan kelonggarannya.
+  inputShort: {
+    minHeight: touchTarget.min,
+  },
+  searchInput: {
+    flex: 1,
+  },
+  // Lebar tetap, bukan bagian dari flex: isinya selalu pendek ("A3"), jadi
+  // sisa ruang lebih berguna untuk kolom pencarian.
   tableInput: {
+    width: 120,
     borderColor: colors.primary[100],
+    backgroundColor: colors.primary[50],
   },
   gridArea: {
     flex: 1,
@@ -500,6 +558,9 @@ const styles = StyleSheet.create({
   },
   wideCart: {
     width: cashierLayout.cartWidth,
+    // Jaring pengaman: apa pun yang tetap tidak muat dipotong di batas kolom,
+    // bukan digambar menimpa batang tab di bawahnya.
+    overflow: "hidden",
     borderLeftWidth: 1,
     borderLeftColor: semantic.border,
     backgroundColor: semantic.surface,
@@ -520,10 +581,24 @@ const styles = StyleSheet.create({
     ...textStyles.price,
     color: semantic.textPrimary,
   },
+  wideCartShort: {
+    width: cashierLayout.cartWidthShort,
+  },
+  wideCartBody: {
+    flex: 1,
+  },
   wideCartFooter: {
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: semantic.border,
+  },
+  wideCartActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  wideCartAction: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
   },
 });

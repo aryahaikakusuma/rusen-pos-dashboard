@@ -19,3 +19,14 @@ export function useLayoutMode(): LayoutMode {
   const { width } = useWindowDimensions();
   return width >= breakpoints.wide ? "tablet" : "phone";
 }
+
+/**
+ * Benar kalau viewport-nya pendek ke bawah. Terpisah dari useLayoutMode karena
+ * keduanya menjawab pertanyaan berbeda: lebar menentukan berapa kolom, tinggi
+ * menentukan seberapa longgar kerangkanya. Ponsel mendatar menjawab "tiga
+ * kolom" dan "rapatkan" sekaligus — dan itu memang dua keputusan.
+ */
+export function useShortViewport(): boolean {
+  const { height } = useWindowDimensions();
+  return height < breakpoints.short;
+}

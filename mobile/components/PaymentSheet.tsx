@@ -50,6 +50,10 @@ export default function PaymentSheet({
       title="Pelunasan Order"
       subtitle={`Meja/Order: ${tableLabel(order.table_code, order.table_seq)}`}
       onClose={onClose}
+      // Berlabuh di atas, bukan di bawah seperti lembar lain: papan ketik
+      // angka naik dari bawah dan menutupi kolom nominal beserta kotak
+      // kembalian — justru dua hal yang harus terlihat saat mengetik.
+      anchor="top"
       footer={
         <Button
           label="Konfirmasi Lunas"
@@ -103,10 +107,20 @@ export default function PaymentSheet({
               editable={!submitting}
             />
 
+            {/* Uang kurang punya kotaknya sendiri, bukan kembalian bernilai
+                nol: kasir perlu tahu berapa lagi yang harus diminta, dan
+                "Rp 0" tidak menjawab itu. Labelnya ikut berganti supaya
+                angka bertanda minus tidak terbaca sebagai kembalian. */}
             <View style={[styles.changeBox, styles[`${tone}Box`]]}>
-              <Text style={styles.boxLabel}>Kembalian</Text>
+              <Text style={styles.boxLabel}>
+                {tone === "short" ? "Kurang" : "Kembalian"}
+              </Text>
               <Text style={[styles.change, styles[`${tone}Text`]]}>
-                {!hasAmount ? "-" : formatRupiah(Math.max(change, 0))}
+                {!hasAmount
+                  ? "-"
+                  : change < 0
+                    ? `− ${formatRupiah(-change)}`
+                    : formatRupiah(change)}
               </Text>
             </View>
           </View>
