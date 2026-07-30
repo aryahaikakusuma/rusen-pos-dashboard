@@ -24,8 +24,13 @@ export const fontSize = {
 } as const;
 
 /**
- * Named text styles. `productCode` is deliberately larger than `productName`:
- * the cashier reads the code first (DESIGN.md).
+ * Named text styles. `productCode` and `productName` are kept even though the
+ * cashier cards no longer render a product code — hot/cold variants share one
+ * card now and showing two codes on it was more confusing than useful, so the
+ * code was dropped from the card (see `components/ProductCard.tsx`). The
+ * search field still matches on code, so a cashier who knows it can still
+ * type it. These styles stay defined in case a code needs to reappear
+ * somewhere else later.
  */
 export const textStyles = {
   screenTitle: {

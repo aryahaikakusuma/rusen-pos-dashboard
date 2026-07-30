@@ -34,9 +34,11 @@ export default function ProductGrid({
       ? cashierLayout.productGridColumns
       : cashierLayout.productGridColumnsPhone;
 
-  // Daftar produk berubah tiap kali kategori atau pencarian berubah.
-  // Mengelompokkan 293 baris di setiap render adalah persis jenis latensi yang
-  // menjegal penarikan katalog di langkah 3.
+  // `products` hanya berganti identitas kalau kategori atau pencarian benar-
+  // benar berubah — pemanggilnya (CashierScreen/EditOrderScreen) membungkus
+  // visibleProducts dalam useMemo. Kalau syarat itu bergeser lagi, pengelompokan
+  // 293 baris balik jalan di setiap render: persis jenis latensi yang menjegal
+  // penarikan katalog di langkah 3.
   const entries = useMemo(() => groupProductVariants(products), [products]);
 
   const renderItem = useCallback(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
 
@@ -67,41 +67,53 @@ export default function EditOrderScreen({
     void listProducts(db).then(setProducts);
   }, [db, reload]);
 
-  const run = async (label: string, action: () => Promise<unknown>) => {
-    setBusy(true);
-    try {
-      await action();
-      toast.success(label);
-    } catch (caught) {
-      toast.error(translateOrderError(caught));
-    } finally {
-      await reload();
-      setBusy(false);
-    }
-  };
+  const run = useCallback(
+    async (label: string, action: () => Promise<unknown>) => {
+      setBusy(true);
+      try {
+        await action();
+        toast.success(label);
+      } catch (caught) {
+        toast.error(translateOrderError(caught));
+      } finally {
+        await reload();
+        setBusy(false);
+      }
+    },
+    [toast, reload]
+  );
 
-  const handleAdd = (productId: string) => {
-    if (!order) return;
-    setAdding(false);
-    setSearch("");
-    void run("Item ditambahkan", () =>
-      appendToOrder(db, {
-        orderId,
-        items: [{ productId, quantity: 1, notes: "" }],
-        expectedVersion: order.version,
-      })
-    );
-  };
+  const handleAdd = useCallback(
+    (productId: string) => {
+      if (!order) return;
+      setAdding(false);
+      setSearch("");
+      void run("Item ditambahkan", () =>
+        appendToOrder(db, {
+          orderId,
+          items: [{ productId, quantity: 1, notes: "" }],
+          expectedVersion: order.version,
+        })
+      );
+    },
+    [order, db, orderId, run]
+  );
 
-  // Lembar suhu dibuka tanpa menyentuh handleAdd, karena handleAdd juga menutup
-  // panel tambah item. Panel baru boleh tertutup setelah suhu dipilih.
-  const selectEntry = (entry: ProductEntry) => {
-    if (entry.options.length === 1) {
-      handleAdd(entry.options[0].product.id);
-      return;
-    }
-    setVariantEntry(entry);
-  };
+  // Sheet "tambah item" harus ditutup dulu sebelum VariantSheet dibuka: RN
+  // Modal tidak mendukung dua Modal tampil bersamaan (z-order dan tombol
+  // back jadi tidak terdefinisi di Android). Jalur satu opsi tetap lewat
+  // handleAdd, yang sudah menutup sheet ini sendiri.
+  const selectEntry = useCallback(
+    (entry: ProductEntry) => {
+      if (entry.options.length === 1) {
+        handleAdd(entry.options[0].product.id);
+        return;
+      }
+      setAdding(false);
+      setVariantEntry(entry);
+    },
+    [handleAdd]
+  );
 
   const handleVoid = () => {
     if (!order || !voiding || !session) return;
@@ -120,6 +132,22 @@ export default function EditOrderScreen({
     );
   };
 
+  const keyword = search.trim().toLowerCase();
+  // Identitas array harus stabil kalau keyword & products tidak berubah,
+  // supaya ProductGrid tidak mengelompokkan ulang dan ProductCard tidak
+  // dianggap berubah props pada tiap render (mis. saat busy berganti).
+  const visibleProducts = useMemo(
+    () =>
+      keyword
+        ? products.filter(
+            (p) =>
+              p.name.toLowerCase().includes(keyword) ||
+              p.code.toLowerCase().includes(keyword)
+          )
+        : products.slice(0, 30),
+    [products, keyword]
+  );
+
   if (!order) {
     return (
       <View style={styles.screen}>
@@ -128,15 +156,6 @@ export default function EditOrderScreen({
       </View>
     );
   }
-
-  const keyword = search.trim().toLowerCase();
-  const visibleProducts = keyword
-    ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(keyword) ||
-          p.code.toLowerCase().includes(keyword)
-      )
-    : products.slice(0, 30);
 
   const editable = order.status === "pending";
 

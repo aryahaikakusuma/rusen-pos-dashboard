@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -98,13 +98,20 @@ export default function CashierScreen({
   // Saat mencari, kategori diabaikan: dengan 293 produk kasir sering tidak
   // hafal suatu menu ada di kategori mana, jadi pencarian menyapu seluruh menu.
   const keyword = search.trim().toLowerCase();
-  const visibleProducts = keyword
-    ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(keyword) ||
-          p.code.toLowerCase().includes(keyword)
-      )
-    : products.filter((p) => p.category_id === selectedCategoryId);
+  // Dibungkus useMemo supaya identitasnya stabil selama products/keyword/
+  // kategori tidak berubah — tanpa ini array baru lahir tiap render (mis.
+  // tiap keranjang berubah) dan menggagalkan memo ProductGrid & ProductCard.
+  const visibleProducts = useMemo(
+    () =>
+      keyword
+        ? products.filter(
+            (p) =>
+              p.name.toLowerCase().includes(keyword) ||
+              p.code.toLowerCase().includes(keyword)
+          )
+        : products.filter((p) => p.category_id === selectedCategoryId),
+    [products, keyword, selectedCategoryId]
+  );
 
   const addProduct = useCallback(
     (productId: string) => {

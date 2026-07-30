@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   },
   option: {
     flex: 1,
-    minHeight: touchTarget.primaryAction,
+    minHeight: touchTarget.comfortable,
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,

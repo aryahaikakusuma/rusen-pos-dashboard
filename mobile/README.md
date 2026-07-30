@@ -43,9 +43,12 @@ The temperature marker in the menu is not uniform — the Kopi category uses a t
 for cold and no suffix for hot, the rest use "Panas"/"Dingin". Read the comments in the
 source file before changing anything here, and change both files together.
 
-Verification lives in the **Uji** screen → **Uji pengelompokan varian**: 255 cards, 38 of
-them paired. If that number changes without the catalog changing, the suffix rule is
-broken.
+Verification lives in the **Uji** screen → **Uji pengelompokan varian**. It asserts
+properties (every product represented exactly once, no duplicate temperature in a card,
+hot always first, price range matches its options, paired names always land in the same
+card) — those are what turn a line red. The card/pair counts (255 cards, 38 paired on the
+seed catalog) are printed as an `info:` line for a human to eyeball, not an assertion:
+adding or removing a product changes the numbers without breaking the rule.
 
 ## Auth — and why the backend had to change
 

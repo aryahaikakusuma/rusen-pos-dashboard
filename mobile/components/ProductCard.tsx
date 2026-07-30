@@ -29,7 +29,7 @@ interface ProductCardProps {
  * mengetiknya — dan hasil pencarian kode selalu satu produk, sehingga langsung
  * masuk keranjang tanpa lembar suhu.
  *
- * Nama dibatasi tiga baris supaya tinggi kartu seragam; grid dengan tinggi
+ * Nama dibatasi dua baris supaya tinggi kartu seragam; grid dengan tinggi
  * baris berbeda-beda terlihat berantakan dan menyulitkan menyasar jari.
  */
 function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
@@ -55,7 +55,7 @@ function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
         pressed && styles.cardPressed,
         disabled && styles.cardDisabled,
       ]}>
-      <Text style={styles.name} numberOfLines={3}>
+      <Text style={styles.name} numberOfLines={2}>
         {entry.label}
       </Text>
 

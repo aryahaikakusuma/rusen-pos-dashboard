@@ -108,6 +108,18 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function handleVariantChecks() {
+    setBusy(true);
+    setLog([]);
+    try {
+      await runVariantChecks(db, append);
+    } catch (error) {
+      append(`GAGAL tak terduga: ${translateOrderError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -141,7 +153,7 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
           label="Uji pengelompokan varian"
           variant="secondary"
           disabled={busy}
-          onPress={() => void runVariantChecks(db, append)}
+          onPress={() => void handleVariantChecks()}
           style={styles.action}
         />
         {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
