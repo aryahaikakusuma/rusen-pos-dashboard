@@ -181,7 +181,7 @@ export default function LoginScreen() {
             <View style={styles.column}>{keypad}</View>
           </>
         ) : (
-          <View style={styles.column}>
+          <View style={styles.columnStacked}>
             <View style={styles.header}>
               <Text style={styles.brand}>Rusen Kopitiam</Text>
               <Text style={styles.tagline}>Point of Sale System</Text>
@@ -261,13 +261,25 @@ const styles = StyleSheet.create({
     maxWidth: 620,
     padding: spacing.lg,
   },
+  // Hanya untuk mode compact, tempat dua kolom berbagi lebar kartu.
   column: {
     flex: 1,
     justifyContent: "center",
   },
+  /**
+   * Mode tegak hanya punya satu kolom, jadi tidak ada yang perlu dibagi — dan
+   * `flex: 1` di sini justru merusak. `flex: 1` berarti `flexBasis: 0`, sehingga
+   * kolom melapor butuh tinggi nol ke kartu yang tingginya `auto`. Kartu pun
+   * menciut jadi setinggi padding-nya saja, lalu semua isinya digambar di luar
+   * kotak itu dan saling menimpa. Di sini kolom harus setinggi isinya.
+   */
+  columnStacked: {
+    width: "100%",
+  },
   header: {
     alignItems: "center",
     marginBottom: spacing.xl,
+    flexShrink: 0,
   },
   brand: {
     ...textStyles.screenTitle,
@@ -348,13 +360,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: KEY_GAP,
+    // Tanpa ini Yoga memampatkan kotak keypad saat isi kartu lebih tinggi dari
+    // layar, sementara tombol yang sudah ter-wrap tetap tergambar di luar kotak
+    // — hasilnya tombol "Masuk" menimpa keypad, bukan terdorong ke bawah.
+    flexShrink: 0,
   },
   key: {
     // Tiga kolom: sisa lebar setelah dua celah, dibagi tiga.
-    width: `${100 / 3}%`,
+    //
+    // minWidth harus muat tiga kolom di ponsel tersempit yang kita dukung.
+    // Lebar dalam kartu = layar - padding layar (24*2) - padding kartu (24*2);
+    // di ponsel 375dp itu tinggal 279dp, sedangkan 3*88 + 2*12 = 288dp. Selisih
+    // 9dp itu membuat keypad turun ke dua kolom, tingginya bertambah dua baris,
+    // dan seluruh kartu meluber — jadi angka ini bukan sekadar selera.
     flexGrow: 1,
     flexBasis: 0,
-    minWidth: 88,
+    minWidth: 72,
     height: touchTarget.comfortable,
     alignItems: "center",
     justifyContent: "center",

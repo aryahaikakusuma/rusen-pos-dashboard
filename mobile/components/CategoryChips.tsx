@@ -71,6 +71,7 @@ export default function CategoryChips({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={styles.stripOuter}
       contentContainerStyle={styles.strip}
       keyboardShouldPersistTaps="handled">
       {items}
@@ -89,10 +90,22 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: spacing.xs,
   },
+  /**
+   * Deretan chip harus setinggi isinya saja. Tanpa ini ScrollView ikut memanjang
+   * mengisi sisa kolom, dan chip-nya ikut tertarik — di ponsel hasilnya pil
+   * setinggi seperempat layar.
+   */
+  stripOuter: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   strip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
+    // Cross-axis ScrollView mendatar itu vertikal, dan default-nya `stretch`.
+    // `center` membuat tinggi chip ditentukan teks + padding-nya sendiri.
+    alignItems: "center",
   },
   chip: {
     justifyContent: "center",
@@ -102,8 +115,11 @@ const styles = StyleSheet.create({
     borderColor: semantic.border,
   },
   chipHorizontal: {
+    // minHeight tetap dipertahankan: itu ambang sentuh 48dp dari DESIGN.md,
+    // bukan gaya. paddingVertical yang menentukan bentuknya di ponsel.
     minHeight: touchTarget.min,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   chipVertical: {
     minHeight: touchTarget.min,
