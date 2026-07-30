@@ -15,6 +15,7 @@ import ProductGrid from "../components/ProductGrid";
 import Sheet from "../components/Sheet";
 import TableConflictDialog from "../components/TableConflictDialog";
 import { useToast } from "../components/Toast";
+import VariantSheet from "../components/VariantSheet";
 import { listCategories, listProducts } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import { appendToOrder, checkTableCode, createOrder } from "../db/orders";
@@ -25,6 +26,7 @@ import type {
   TableConflict,
 } from "../db/types";
 import { useAuth } from "../lib/auth-context";
+import type { ProductEntry } from "../lib/product-variants";
 import { formatRupiah, type DraftItem } from "../lib/types";
 import { useLayoutMode } from "../lib/use-layout-mode";
 import {
@@ -68,6 +70,7 @@ export default function CashierScreen({
   const [error, setError] = useState("");
   const [conflicts, setConflicts] = useState<TableConflict[] | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [variantEntry, setVariantEntry] = useState<ProductEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +135,19 @@ export default function CashierScreen({
       });
     },
     [products]
+  );
+
+  // Satu suhu berarti tidak ada yang perlu ditanyakan; kasir menekan sekali
+  // seperti sebelumnya. Lembar hanya muncul kalau memang ada pilihan.
+  const selectEntry = useCallback(
+    (entry: ProductEntry) => {
+      if (entry.options.length === 1) {
+        addProduct(entry.options[0].product.id);
+        return;
+      }
+      setVariantEntry(entry);
+    },
+    [addProduct]
   );
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
@@ -274,7 +290,7 @@ export default function CashierScreen({
     <ProductGrid
       products={visibleProducts}
       disabled={saving}
-      onAddItem={addProduct}
+      onSelect={selectEntry}
       emptyHint={
         keyword
           ? `Tidak ada produk cocok dengan "${search.trim()}"`
@@ -385,6 +401,17 @@ export default function CashierScreen({
           </View>
         </View>
       )}
+
+      {variantEntry ? (
+        <VariantSheet
+          entry={variantEntry}
+          onPick={(productId) => {
+            addProduct(productId);
+            setVariantEntry(null);
+          }}
+          onCancel={() => setVariantEntry(null)}
+        />
+      ) : null}
 
       {conflicts ? (
         <TableConflictDialog

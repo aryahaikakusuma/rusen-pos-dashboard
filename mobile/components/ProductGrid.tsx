@@ -1,7 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 
 import { useLayoutMode } from "../lib/use-layout-mode";
+import {
+  groupProductVariants,
+  type ProductEntry,
+} from "../lib/product-variants";
 import type { ProductRow } from "../db/types";
 import { cashierLayout, semantic, spacing, textStyles } from "../theme";
 import ProductCard from "./ProductCard";
@@ -10,7 +14,7 @@ interface ProductGridProps {
   products: ProductRow[];
   disabled?: boolean;
   emptyHint: string;
-  onAddItem: (productId: string) => void;
+  onSelect: (entry: ProductEntry) => void;
 }
 
 /**
@@ -22,7 +26,7 @@ export default function ProductGrid({
   products,
   disabled,
   emptyHint,
-  onAddItem,
+  onSelect,
 }: ProductGridProps) {
   const mode = useLayoutMode();
   const columns =
@@ -30,20 +34,23 @@ export default function ProductGrid({
       ? cashierLayout.productGridColumns
       : cashierLayout.productGridColumnsPhone;
 
+  // Daftar produk berubah tiap kali kategori atau pencarian berubah.
+  // Mengelompokkan 293 baris di setiap render adalah persis jenis latensi yang
+  // menjegal penarikan katalog di langkah 3.
+  const entries = useMemo(() => groupProductVariants(products), [products]);
+
   const renderItem = useCallback(
-    ({ item }: { item: ProductRow }) => (
+    ({ item }: { item: ProductEntry }) => (
       <ProductCard
-        code={item.code}
-        name={item.name}
-        price={item.price}
+        entry={item}
         disabled={disabled}
-        onPress={() => onAddItem(item.id)}
+        onPress={() => onSelect(item)}
       />
     ),
-    [disabled, onAddItem]
+    [disabled, onSelect]
   );
 
-  if (products.length === 0) {
+  if (entries.length === 0) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyText}>{emptyHint}</Text>
@@ -56,8 +63,8 @@ export default function ProductGrid({
       // Jumlah kolom berubah saat perangkat diputar, dan FlatList tidak bisa
       // mengubahnya pada instance yang sama. Key memaksa remount.
       key={`grid-${columns}`}
-      data={products}
-      keyExtractor={(item) => item.id}
+      data={entries}
+      keyExtractor={(item) => item.key}
       renderItem={renderItem}
       numColumns={columns}
       columnWrapperStyle={styles.row}

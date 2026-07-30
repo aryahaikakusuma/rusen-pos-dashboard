@@ -1,7 +1,8 @@
 import { memo } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatRupiah } from "../lib/types";
+import type { ProductEntry } from "../lib/product-variants";
 import {
   cashierLayout,
   colors,
@@ -12,29 +13,41 @@ import {
 } from "../theme";
 
 interface ProductCardProps {
-  code: string;
-  name: string;
-  price: number;
+  entry: ProductEntry;
   disabled?: boolean;
   onPress: () => void;
 }
 
 /**
- * Kode di atas dan lebih besar dari nama — kasir membaca kode lebih dulu
- * (DESIGN.md). Nama dibatasi dua baris supaya tinggi kartu seragam; grid dengan
- * tinggi baris berbeda-beda terlihat berantakan dan menyulitkan menyasar jari.
+ * Kode produk sengaja tidak ditampilkan, mengikuti kartu di aplikasi web.
+ * Kartu gabungan punya dua kode ("Coklat" adalah K26 dan K27 sekaligus) dan
+ * menampilkan keduanya justru membingungkan.
+ *
+ * Ini menyimpang dari DESIGN.md, yang menyatakan kasir membaca kode lebih dulu
+ * sehingga kode dibuat lebih besar dari nama. Penyimpangan diambil sadar:
+ * kolom pencarian tetap menyapu kode, jadi kasir yang hafal kode masih bisa
+ * mengetiknya — dan hasil pencarian kode selalu satu produk, sehingga langsung
+ * masuk keranjang tanpa lembar suhu.
+ *
+ * Nama dibatasi tiga baris supaya tinggi kartu seragam; grid dengan tinggi
+ * baris berbeda-beda terlihat berantakan dan menyulitkan menyasar jari.
  */
-function ProductCardBase({
-  code,
-  name,
-  price,
-  disabled,
-  onPress,
-}: ProductCardProps) {
+function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
+  const hasVariants = entry.options.length > 1;
+  const price =
+    entry.minPrice === entry.maxPrice
+      ? formatRupiah(entry.minPrice)
+      : // Rentang harga: panas dan dingin sering beda tarif.
+        `${formatRupiah(entry.minPrice)}+`;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${code} ${name}, ${formatRupiah(price)}`}
+      accessibilityLabel={
+        hasVariants
+          ? `${entry.label}, mulai ${formatRupiah(entry.minPrice)}, tersedia panas dan dingin`
+          : `${entry.label}, ${formatRupiah(entry.minPrice)}`
+      }
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
@@ -42,13 +55,18 @@ function ProductCardBase({
         pressed && styles.cardPressed,
         disabled && styles.cardDisabled,
       ]}>
-      <Text style={styles.code} numberOfLines={1}>
-        {code}
+      <Text style={styles.name} numberOfLines={3}>
+        {entry.label}
       </Text>
-      <Text style={styles.name} numberOfLines={2}>
-        {name}
-      </Text>
-      <Text style={styles.price}>{formatRupiah(price)}</Text>
+
+      <View style={styles.footer}>
+        <Text style={styles.price}>{price}</Text>
+        {hasVariants ? (
+          <View style={styles.variantTag}>
+            <Text style={styles.variantTagLabel}>Panas/Dingin</Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -78,18 +96,28 @@ const styles = StyleSheet.create({
   cardDisabled: {
     opacity: 0.5,
   },
-  code: {
-    ...textStyles.productCode,
+  name: {
+    ...textStyles.bodyStrong,
     color: semantic.textPrimary,
   },
-  name: {
-    ...textStyles.productName,
-    marginTop: spacing.xs,
-    color: semantic.textSecondary,
+  footer: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
   price: {
     ...textStyles.price,
-    marginTop: spacing.sm,
     color: semantic.textPrimary,
+  },
+  variantTag: {
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary[50],
+  },
+  variantTagLabel: {
+    ...textStyles.statusBadge,
+    fontSize: 10,
+    color: colors.primary[600],
   },
 });

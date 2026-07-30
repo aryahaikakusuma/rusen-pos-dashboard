@@ -7,11 +7,13 @@ import ProductGrid from "../components/ProductGrid";
 import Sheet from "../components/Sheet";
 import StatusBadge from "../components/StatusBadge";
 import { useToast } from "../components/Toast";
+import VariantSheet from "../components/VariantSheet";
 import { listProducts } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import { appendToOrder, getOrder, voidOrderItem } from "../db/orders";
 import type { OrderItemRow, OrderRow, ProductRow } from "../db/types";
 import { useAuth } from "../lib/auth-context";
+import type { ProductEntry } from "../lib/product-variants";
 import { formatRupiah, tableLabel } from "../lib/types";
 import {
   colors,
@@ -54,6 +56,7 @@ export default function EditOrderScreen({
   const [voiding, setVoiding] = useState<OrderItemRow | null>(null);
   const [voidQty, setVoidQty] = useState("");
   const [voidReason, setVoidReason] = useState("");
+  const [variantEntry, setVariantEntry] = useState<ProductEntry | null>(null);
 
   const reload = useCallback(async () => {
     setOrder(await getOrder(db, orderId));
@@ -88,6 +91,16 @@ export default function EditOrderScreen({
         expectedVersion: order.version,
       })
     );
+  };
+
+  // Lembar suhu dibuka tanpa menyentuh handleAdd, karena handleAdd juga menutup
+  // panel tambah item. Panel baru boleh tertutup setelah suhu dipilih.
+  const selectEntry = (entry: ProductEntry) => {
+    if (entry.options.length === 1) {
+      handleAdd(entry.options[0].product.id);
+      return;
+    }
+    setVariantEntry(entry);
   };
 
   const handleVoid = () => {
@@ -215,11 +228,22 @@ export default function EditOrderScreen({
           <View style={styles.gridWrap}>
             <ProductGrid
               products={visibleProducts}
-              onAddItem={handleAdd}
+              onSelect={selectEntry}
               emptyHint="Tidak ada produk cocok"
             />
           </View>
         </Sheet>
+      ) : null}
+
+      {variantEntry ? (
+        <VariantSheet
+          entry={variantEntry}
+          onPick={(productId) => {
+            setVariantEntry(null);
+            handleAdd(productId);
+          }}
+          onCancel={() => setVariantEntry(null)}
+        />
       ) : null}
 
       {voiding ? (
