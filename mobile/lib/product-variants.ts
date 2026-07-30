@@ -3,7 +3,7 @@
 // Di database, panas dan dingin adalah dua produk terpisah dengan kode dan harga
 // masing-masing (mis. "Coklat Panas" Rp 17.000 dan "Coklat Dingin" Rp 20.000).
 // Itu benar untuk pencatatan, tapi memaksa kasir memindai dua kartu untuk satu
-// menu. Di layar, keduanya digabung jadi satu kartu "Coklat"; suhunya baru
+// menu. Di layar keduanya digabung jadi satu kartu "Coklat"; suhunya baru
 // ditanyakan setelah kartu ditekan.
 //
 // Penanda suhu di daftar menu tidak seragam. Selain "Panas"/"Dingin", kategori
@@ -14,30 +14,23 @@
 //   Kopi S            Rp 15.000   ← dingin
 //   Kopi Susu Panas   Rp 13.000
 //   Kopi Susu S       Rp 18.000
-//   Kopi Milo Susu    / Kopi Milo Susu Es
 //
 // Jadi nama tanpa akhiran diperlakukan sebagai kandidat "panas", dan baru benar-
 // benar digabung kalau ada saudara dinginnya. Kalau tidak ada, kartunya berdiri
 // sendiri persis seperti produk biasa.
 //
 // Yang dikirim ke server tetap productId asli — pengelompokan ini murni tampilan.
-
-// Kembaran berkas ini ada di mobile/lib/product-variants.ts. Keduanya sengaja
-// diduplikasi, bukan berbagi satu sumber: Metro tidak mengimpor dari luar
-// folder mobile/, dan menyatukannya butuh npm workspace — perubahan struktural
-// yang lebih besar daripada logika di berkas ini. Pola yang sama sudah dipakai
-// untuk nilai warna antara app/globals.css dan mobile/theme/.
 //
-// Konsekuensinya: setiap perubahan logika di sini WAJIB diterapkan di sana juga.
-// Kalau tidak, kasir melihat isi kartu yang berbeda di web dan di ponsel untuk
-// katalog yang sama, dan tidak ada tes yang akan menangkapnya.
+// Kembaran berkas ini ada di lib/product-variants.ts (aplikasi web). Keduanya
+// harus berubah bersama: kalau berbeda, kasir melihat isi kartu yang berbeda di
+// dua perangkat untuk katalog yang sama, dan tidak ada tes yang menangkapnya.
 
-import { type Product } from "@/lib/types";
+import type { ProductRow } from "../db/types";
 
 export type TemperatureVariant = "panas" | "dingin";
 
 export interface ProductOption {
-  product: Product;
+  product: ProductRow;
   variant: TemperatureVariant;
 }
 
@@ -57,7 +50,10 @@ export interface ProductEntry {
  */
 const SUFFIX = /\s+(panas|dingin|es|s)$/i;
 
-function readVariant(name: string): { base: string; variant: TemperatureVariant } {
+function readVariant(name: string): {
+  base: string;
+  variant: TemperatureVariant;
+} {
   const match = SUFFIX.exec(name);
   if (!match) {
     // Tanpa akhiran: kandidat panas, dengan nama utuh sebagai nama dasar.
@@ -76,18 +72,18 @@ function readVariant(name: string): { base: string; variant: TemperatureVariant 
  * (mis. "Jahe Gula Merah" di JAHE dan "Teh Gula Merah" di TEH) tidak tercampur.
  * Urutan produk masukan dipertahankan.
  */
-export function groupProductVariants(products: Product[]): ProductEntry[] {
+export function groupProductVariants(products: ProductRow[]): ProductEntry[] {
   const entries: ProductEntry[] = [];
   const byKey = new Map<string, ProductEntry>();
 
   for (const product of products) {
     const { base, variant } = readVariant(product.name);
-    const key = `${product.categoryId}:${base.toLowerCase()}`;
+    const key = `${product.category_id}:${base.toLowerCase()}`;
     const existing = byKey.get(key);
 
     // Kalau suhu yang sama sudah terisi, dua produk ini bukan pasangan varian
     // (nama dasarnya kebetulan sama). Biarkan berdiri sendiri daripada
-    // memunculkan dialog dengan dua tombol "Panas".
+    // memunculkan lembar dengan dua tombol "Panas".
     if (existing && !existing.options.some((o) => o.variant === variant)) {
       existing.options.push({ product, variant });
       existing.minPrice = Math.min(existing.minPrice, product.price);

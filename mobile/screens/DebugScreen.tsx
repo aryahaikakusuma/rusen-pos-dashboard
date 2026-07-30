@@ -22,6 +22,10 @@ import {
 } from "../db/orders";
 import { useAuth } from "../lib/auth-context";
 import {
+  groupProductVariants,
+  type ProductEntry,
+} from "../lib/product-variants";
+import {
   border,
   colors,
   radius,
@@ -131,6 +135,13 @@ export default function DebugScreen({ onClose }: { onClose: () => void }) {
           label="Hapus data uji"
           disabled={busy}
           onPress={() => void handleClearTests()}
+          style={styles.action}
+        />
+        <Button
+          label="Uji pengelompokan varian"
+          variant="secondary"
+          disabled={busy}
+          onPress={() => void runVariantChecks(db, append)}
           style={styles.action}
         />
         {busy ? <ActivityIndicator color={colors.primary[600]} /> : null}
@@ -399,6 +410,121 @@ async function runSelfTest(
   });
 
   append("— selesai —");
+}
+
+/**
+ * Pemeriksaan pengelompokan varian suhu. Dijalankan atas katalog lokal yang
+ * sesungguhnya, bukan data buatan: yang mau dibuktikan justru bahwa aturan
+ * akhiran cocok dengan penamaan menu yang dipakai outlet ini.
+ */
+async function runVariantChecks(
+  db: ReturnType<typeof useSQLiteContext>,
+  append: (line: string) => void
+) {
+  const products = await listProducts(db);
+  if (products.length === 0) {
+    append("GAGAL: katalog lokal kosong. Tarik katalog dulu.");
+    return;
+  }
+
+  const entries = groupProductVariants(products);
+  const paired = entries.filter((e) => e.options.length > 1);
+
+  const ok = (label: string) => append(`OK  ${label}`);
+  const fail = (label: string, detail: string) =>
+    append(`GAGAL ${label}: ${detail}`);
+
+  // Asersi sifat, bukan jumlah. Menambah atau menghapus menu tidak boleh
+  // membuat pemeriksaan ini merah — yang diuji aturannya, bukan isi katalog.
+
+  // 1. Tidak ada produk yang hilang atau terhitung dua kali. Ini yang menangkap
+  //    kegagalan paling mahal: menu yang lenyap dari grid tanpa error.
+  const grouped = entries.flatMap((e) => e.options.map((o) => o.product.id));
+  const uniqueGrouped = new Set(grouped);
+  if (grouped.length !== products.length || uniqueGrouped.size !== products.length) {
+    fail(
+      "semua produk terwakili tepat sekali",
+      `${products.length} produk jadi ${grouped.length} opsi (${uniqueGrouped.size} unik)`
+    );
+  } else {
+    ok("semua produk terwakili tepat sekali");
+  }
+
+  // 2. Satu entry tidak boleh punya dua opsi bersuhu sama — itu akan memunculkan
+  //    lembar dengan dua tombol "Panas".
+  const duplicateVariant = entries.find(
+    (e) => new Set(e.options.map((o) => o.variant)).size !== e.options.length
+  );
+  if (duplicateVariant) {
+    fail("tidak ada suhu kembar dalam satu kartu", `"${duplicateVariant.label}"`);
+  } else {
+    ok("tidak ada suhu kembar dalam satu kartu");
+  }
+
+  // 3. Panas selalu opsi pertama, supaya posisi tombol tidak berpindah antar menu.
+  const wrongOrder = paired.find((e) => e.options[0].variant !== "panas");
+  if (wrongOrder) {
+    fail("panas selalu di urutan pertama", `"${wrongOrder.label}"`);
+  } else {
+    ok("panas selalu di urutan pertama");
+  }
+
+  // 4. Rentang harga cocok dengan opsi yang benar-benar ada.
+  const wrongPrice = entries.find((e) => {
+    const prices = e.options.map((o) => o.product.price);
+    return e.minPrice !== Math.min(...prices) || e.maxPrice !== Math.max(...prices);
+  });
+  if (wrongPrice) {
+    fail("rentang harga cocok dengan opsinya", `"${wrongPrice.label}"`);
+  } else {
+    ok("rentang harga cocok dengan opsinya");
+  }
+
+  // 5. Kartu tunggal memakai nama utuh, kartu gabungan memakai nama dasar.
+  const wrongLabel = entries.find(
+    (e) => e.options.length === 1 && e.label !== e.options[0].product.name
+  );
+  if (wrongLabel) {
+    fail("kartu tunggal memakai nama utuh", `"${wrongLabel.label}"`);
+  } else {
+    ok("kartu tunggal memakai nama utuh");
+  }
+
+  // 6. Inti aturannya: dua produk sekategori yang namanya hanya berbeda pada
+  //    penanda suhu WAJIB berada di kartu yang sama. Normalisasi di bawah ini
+  //    sengaja ditulis ulang di sini, tidak diimpor dari modulnya — kalau ia
+  //    mengimpor regex yang sama, pemeriksaan ini jadi memutar dan selalu lolos
+  //    meski aturannya rusak. Inilah yang menangkap hilangnya akhiran "S".
+  const strip = (name: string) =>
+    name.replace(/\s+(panas|dingin|es|s)$/i, "").trim().toLowerCase();
+  const entryOfProduct = new Map<string, ProductEntry>();
+  for (const entry of entries) {
+    for (const option of entry.options) entryOfProduct.set(option.product.id, entry);
+  }
+  let separated: string | null = null;
+  for (const a of products) {
+    for (const b of products) {
+      if (a.id === b.id || a.category_id !== b.category_id) continue;
+      if (a.name === b.name || strip(a.name) !== strip(b.name)) continue;
+      if (entryOfProduct.get(a.id) !== entryOfProduct.get(b.id)) {
+        separated = `"${a.name}" dan "${b.name}"`;
+        break;
+      }
+    }
+    if (separated) break;
+  }
+  if (separated) {
+    fail("pasangan suhu selalu satu kartu", separated);
+  } else {
+    ok("pasangan suhu selalu satu kartu");
+  }
+
+  // Informasi, bukan asersi. Angkanya berguna dilihat manusia — saat rencana ini
+  // ditulis katalog seed menghasilkan 255 kartu, 38 di antaranya berpasangan —
+  // tapi menegaskannya membuat uji merah setiap kali menu bertambah.
+  append(
+    `info: ${products.length} produk → ${entries.length} kartu, ${paired.length} berpasangan`
+  );
 }
 
 const short = (iso: string) => new Date(iso).toLocaleString("id-ID");
