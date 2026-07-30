@@ -33,6 +33,20 @@ To verify it, log in, tap **Tarik katalog** once while online, then **Jalankan u
 the self-test exercises the full order lifecycle and every rejection path. Re-run it in
 airplane mode: the local layer must not touch the network at all.
 
+## Varian suhu (`lib/product-variants.ts`)
+
+Salinan `lib/product-variants.ts` milik aplikasi web, bukan implementasi terpisah. Panas dan
+dingin tetap dua produk di database; penggabungan hanya terjadi di layar, dan `productId`
+yang masuk keranjang selalu produk aslinya.
+
+Penanda suhu di menu tidak seragam — kategori Kopi memakai akhiran "S" untuk dingin dan
+tanpa akhiran untuk panas, sisanya memakai "Panas"/"Dingin". Baca komentar di berkas
+sumbernya sebelum mengubah apa pun di sini, dan ubah kedua berkas bersamaan.
+
+Verifikasinya ada di layar **Uji** → **Uji pengelompokan varian**: 255 kartu, 38 di
+antaranya berpasangan. Kalau angka itu berubah tanpa katalog berubah, aturan akhirannya
+rusak.
+
 ## Auth — and why the backend had to change
 
 MIGRATION.md assumed an existing Supabase Edge Function validated PINs and that no backend
