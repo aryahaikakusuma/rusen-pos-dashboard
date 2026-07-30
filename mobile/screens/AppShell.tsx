@@ -79,6 +79,7 @@ function Shell() {
           kembali, dan posisi gulir grid tetap. */}
       <View style={[styles.content, tab !== "cashier" && styles.hidden]}>
         <CashierScreen
+          refreshToken={refreshToken}
           onOpenMenu={() => setMenuOpen(true)}
           onSaved={() => {
             bumpOrders();

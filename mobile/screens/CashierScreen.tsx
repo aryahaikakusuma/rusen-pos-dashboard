@@ -55,11 +55,19 @@ import {
 export default function CashierScreen({
   onSaved,
   onOpenMenu,
+  refreshToken,
 }: {
   /** Dipanggil setelah order tersimpan, supaya daftar order ikut segar. */
   onSaved: () => void;
   /** Membuka lembar menu milik AppShell — nama kasir, Katalog/Uji, Keluar. */
   onOpenMenu: () => void;
+  /**
+   * Berubah nilainya saat layar Katalog/Uji ditutup. Layar ini tidak pernah
+   * di-unmount — AppShell menahannya tetap terpasang supaya keranjang tidak
+   * hilang saat pindah tab — jadi tanpa penanda ini katalog yang baru ditarik
+   * tidak akan pernah terbaca, dan grid tetap kosong sampai aplikasi dimatikan.
+   */
+  refreshToken: number;
 }) {
   const db = useSQLiteContext();
   const toast = useToast();
@@ -94,7 +102,7 @@ export default function CashierScreen({
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [db, refreshToken]);
 
   const total = items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
@@ -314,7 +322,11 @@ export default function CashierScreen({
         keyword
           ? `Tidak ada produk cocok dengan "${search.trim()}"`
           : products.length === 0
-            ? "Katalog belum ditarik. Buka tab Order lalu tekan Tarik katalog."
+            ? // Petunjuknya menyebut tempat tombolnya berada sekarang. Sebelumnya
+              // tertulis "Buka tab Order", dan tombol itu tidak pernah ada di
+              // sana — kasir yang menurut pada petunjuk ini akan mencari-cari
+              // sesuatu yang tidak ada, tepat saat aplikasi belum bisa dipakai.
+              "Katalog belum ditarik. Buka menu ☰ lalu tekan Katalog."
             : "Pilih kategori lain"
       }
     />
