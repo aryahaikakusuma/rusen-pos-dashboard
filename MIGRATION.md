@@ -334,13 +334,38 @@ both USB and Bluetooth Classic, and confirm which transport the outlet will use.
 - ~~The steps 4-5 UI has not run on a device~~ **Partly resolved.** The portrait cashier
   layout, the login screen, the category strip, and the merged variant cards have all been
   seen on a phone, and three layout defects were found and fixed there that no typecheck
-  could have caught. Still unverified on device: the step 4 unsent badge and manual push,
-  the repeat-push no-op, the offline run, and the three-column landscape layout.
+  could have caught. The step 4 queue has now run too: an order created offline showed the
+  unsent badge, stayed at one order after being paid offline rather than becoming two, and
+  the badge cleared on the manual push. Still unverified on device: the three-column
+  landscape layout.
+- **Three test orders sit on the hosted database and will show up in sales reports.**
+  Table codes `A3` (Rp 50.000), `Z9` (Rp 29.000), and `ZZ` (Rp 1.000, id
+  `200f18fa-0514-4705-954a-936284f5d7f5`, the idempotency probe). They have to be deleted
+  from the dashboard — no employee account holds a DELETE grant, deliberately.
 - **The LAN path from phone to laptop does not work on this network.** Metro binds
   correctly and the firewall allows it; the phone simply cannot reach `192.168.100.4:8081`,
   almost certainly router client isolation. Device testing runs over
   `adb reverse tcp:8081 tcp:8081` on USB instead, which bypasses the network entirely.
   Worth knowing before anyone spends another hour on firewall rules.
+- **An order pushed before it was finalized freezes on the server in that state, and the
+  payment never arrives.** This is a money defect and it fails silently. `push_order` refuses
+  to overwrite an id it already holds — correct as a duplicate guard, and verified on the
+  hosted database: three identical pushes returned `inserted:true`, then `false`, then
+  `false`. But paying, appending an item, and voiding all reset `sync_status` back to
+  `'pending'` (`mobile/db/orders.ts:219,302,308,360`), so the order re-enters the queue,
+  gets answered `inserted:false`, and `pushPending` marks it synced because no error was
+  raised (`mobile/db/push.ts`). The server keeps the old status and the old total forever.
+  Nothing about this path is exotic: `AppShell` runs `pushPending` on every app open with a
+  live session, so unpaid orders are routinely pushed first and paid half an hour later.
+  Sales reports would simply be short of money, with no error anywhere. It escaped notice
+  until now because the orders tested so far happened to be created and paid entirely
+  offline, then pushed once when already final — the lucky path, not the common one.
+  The fix worth making: give `push_order` an update branch keyed on `version`. If the id
+  exists and the incoming `version` is higher, update the order and insert the items,
+  voids, and payment that are not there yet; otherwise keep returning `inserted:false`. The
+  money re-check already in the function applies unchanged, and `version` is already bumped
+  on every local write. The cheaper, narrower alternative is to queue only finalized
+  orders, which costs the offline backup for orders that stay open a long time.
 - **`payments` has no `ON DELETE CASCADE` in Postgres but does in the local SQLite schema.**
   Harmless today — nothing deletes orders in production — but the two schemas differ, and
   the divergence surfaced while cleaning up a test order by hand.
