@@ -13,7 +13,7 @@ import ModalAwalSheet from "../components/ModalAwalSheet";
 import ModeUjiSheet from "../components/ModeUjiSheet";
 import PrinterSheet from "../components/PrinterSheet";
 import Sheet from "../components/Sheet";
-import ToastProvider, { useToast } from "../components/Toast";
+import { useToast } from "../components/Toast";
 import TutupKasirConfirm from "../components/TutupKasirConfirm";
 import TutupKasirSheet from "../components/TutupKasirSheet";
 import {
@@ -25,11 +25,12 @@ import {
   type CashTotals,
 } from "../db/cash";
 import { pushPending } from "../db/push";
+import { useCart } from "../lib/cart-context";
 import { closeShift, shiftTotals, type ShiftTotals } from "../db/shift";
 import { useAuth } from "../lib/auth-context";
 import { printShiftReport, translatePrinterError } from "../lib/printer";
 import { kasSeharusnya, type ShiftReport } from "../lib/receipt";
-import { ShiftProvider, useGateShift, useShift } from "../lib/shift-context";
+import { useGateShift, useShift } from "../lib/shift-context";
 import { useShortViewport } from "../lib/use-layout-mode";
 import {
   colors,
@@ -48,38 +49,32 @@ import PengaturanScreen from "./PengaturanScreen";
 type Tab = "cashier" | "orders";
 
 /**
- * Dua layar saja, jadi navigasinya cukup sebuah state. expo-router sengaja
- * belum dipasang: routing berbasis berkas baru sepadan kalau layarnya banyak
- * atau butuh tautan dalam, dan keduanya belum berlaku di sini.
+ * Pemilih tab Kasir/Order. ToastProvider, ShiftProvider, dan CartProvider tidak
+ * lagi dipasang di sini melainkan di app/_layout.tsx — halaman keranjang,
+ * pelunasan, dan kas adalah rute sebelah layar ini, bukan anaknya, dan provider
+ * yang tinggal di sini tidak akan terbaca dari sana.
  */
 export default function AppShell() {
-  return (
-    <ToastProvider>
-      {/* ShiftProvider di dalam ToastProvider: useGateShift menolak aksi lewat
-          toast, jadi ia harus bisa membacanya. */}
-      <ShiftProvider>
-        <Shell />
-      </ShiftProvider>
-    </ToastProvider>
-  );
-}
-
-function Shell() {
   const db = useSQLiteContext();
   const { session, logout } = useAuth();
   const toast = useToast();
   const { shift, aktif, membuka, mulai, tandaiTutup } = useShift();
   const gateShift = useGateShift();
+  // Mode uji, katalog, dan penanda "order baru tersimpan" dimiliki CartProvider
+  // (lib/cart-context.tsx) — halaman keranjang membacanya juga, dan dua salinan
+  // akan menyimpang.
+  const {
+    testMode: modeUji,
+    setTestMode: setModeUji,
+    savedTick,
+    reloadProducts,
+  } = useCart();
   const [tab, setTab] = useState<Tab>("cashier");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [debug, setDebug] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pengaturanOpen, setPengaturanOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
-  // Mode uji. Dimiliki di sini, bukan di CashierScreen: penandanya harus tetap
-  // terlihat saat kasir menengok tab Order, dan mematikannya adalah keputusan
-  // yang menyangkut kedua layar. `null` = mati.
-  const [modeUji, setModeUji] = useState<{ reason: string } | null>(null);
   const [modeUjiOpen, setModeUjiOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [pembaruan, setPembaruan] = useState<string | null>(null);
@@ -120,6 +115,16 @@ function Shell() {
   const bumpOrders = useCallback(() => {
     setRefreshToken((n) => n + 1);
   }, []);
+
+  // Sebuah order baru saja tersimpan dari halaman keranjang: segarkan daftar
+  // order dan tunjukkan hasilnya. Dulu ini callback `onSaved` yang diturunkan
+  // ke CashierScreen; sejak keranjang jadi rute sebelah, arah datanya dibalik —
+  // provider menaikkan penanda, layar ini yang menyimak.
+  useEffect(() => {
+    if (savedTick === 0) return;
+    bumpOrders();
+    setTab("orders");
+  }, [savedTick, bumpOrders]);
 
   const handleOpenShift = async (modalAwal: number) => {
     await mulai(modalAwal);
@@ -327,15 +332,6 @@ function Shell() {
         <CashierScreen
           refreshToken={refreshToken}
           onOpenMenu={() => setMenuOpen(true)}
-          testMode={modeUji}
-          onTestOrderCreated={() => {
-            setModeUji(null);
-            toast.success("Mode uji dimatikan. Order berikutnya dihitung normal.");
-          }}
-          onSaved={() => {
-            bumpOrders();
-            setTab("orders");
-          }}
         />
       </View>
       <View style={[styles.content, tab !== "orders" && styles.hidden]}>

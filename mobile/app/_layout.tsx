@@ -7,8 +7,11 @@ import { Slot } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import ToastProvider from '../components/Toast';
 import { migrateDbIfNeeded } from '../db/migrations';
 import { AuthProvider, useAuth } from '../lib/auth-context';
+import { CartProvider } from '../lib/cart-context';
+import { ShiftProvider } from '../lib/shift-context';
 import LoginScreen from '../screens/LoginScreen';
 import { appFonts, colors } from '../theme';
 
@@ -57,10 +60,33 @@ function Root() {
     );
   }
 
+  if (!session) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <LoginScreen />
+      </>
+    );
+  }
+
   return (
     <>
-      <StatusBar style={session ? 'dark' : 'light'} />
-      {session ? <Slot /> : <LoginScreen />}
+      <StatusBar style="dark" />
+      {/* Ketiganya membungkus Slot, bukan dipasang di dalam AppShell: halaman
+          keranjang, pelunasan, dan kas adalah rute SEBELAH app/index.tsx —
+          bukan anaknya — jadi provider yang tinggal di dalam AppShell tidak
+          akan terbaca dari sana.
+
+          ShiftProvider di dalam ToastProvider: useGateShift menolak aksi lewat
+          toast, jadi ia harus bisa membacanya. CartProvider terdalam: ia
+          memanggil useGateShift saat item ditambahkan. */}
+      <ToastProvider>
+        <ShiftProvider>
+          <CartProvider>
+            <Slot />
+          </CartProvider>
+        </ShiftProvider>
+      </ToastProvider>
     </>
   );
 }
