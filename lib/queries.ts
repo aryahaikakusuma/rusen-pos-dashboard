@@ -1,72 +1,20 @@
 import "server-only";
 
 import { db } from "./supabase/server";
-import type { Category, Order, OrderItem, Product } from "./types";
+import type { Order, OrderItem } from "./types";
 
 const ORDER_SELECT = `
-  id, table_code, table_seq, status, total, version,
+  id, table_code, table_seq, status, subtotal, taxable_subtotal, total, version,
+  tax_status, tax_rate_bps, tax_amount, tax_exempt_reason,
   created_at, paid_at, payment_method, amount_received, change_amount,
   created_by_employee:employees!orders_created_by_fkey (name),
   paid_by_employee:employees!orders_paid_by_fkey (name),
+  tax_approved_by_employee:employees!orders_tax_approved_by_fkey (name),
   order_items (
     id, product_id, product_code, product_name,
-    quantity, unit_price, notes, subtotal
+    quantity, unit_price, notes, subtotal, taxable
   )
 `;
-
-export async function getCategories(): Promise<Category[]> {
-  const { data, error } = await db
-    .from("categories")
-    .select("id, code, name, sort_order")
-    .eq("active", true)
-    .order("sort_order");
-
-  if (error) throw new Error(`Gagal memuat kategori: ${error.message}`);
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    sortOrder: row.sort_order,
-  }));
-}
-
-export async function getProducts(): Promise<Product[]> {
-  const { data, error } = await db
-    .from("products")
-    .select("id, category_id, code, name, price")
-    .eq("active", true)
-    .order("code");
-
-  if (error) throw new Error(`Gagal memuat produk: ${error.message}`);
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    categoryId: row.category_id,
-    code: row.code,
-    name: row.name,
-    price: row.price,
-  }));
-}
-
-/** Antrean "Daftar Order": belum lunas dulu, lalu yang sudah lunas hari ini. */
-export async function getOrderQueue(): Promise<Order[]> {
-  const { data, error } = await db
-    .from("orders")
-    .select(ORDER_SELECT)
-    .in("status", ["pending", "paid"])
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error) throw new Error(`Gagal memuat daftar order: ${error.message}`);
-
-  const orders = (data ?? []).map(mapOrder);
-  // Belum lunas selalu di atas — itulah yang butuh tindakan kasir.
-  return orders.sort((a, b) => {
-    if (a.status !== b.status) return a.status === "pending" ? -1 : 1;
-    return b.createdAt.localeCompare(a.createdAt);
-  });
-}
 
 export async function getPaidOrders(limit = 100): Promise<Order[]> {
   const { data, error } = await db
@@ -112,6 +60,7 @@ function mapOrder(row: any): Order {
     unitPrice: item.unit_price,
     notes: item.notes,
     subtotal: item.subtotal,
+    taxable: item.taxable ?? true,
   }));
 
   // Urutan item dari PostgREST tidak dijamin; kunci ke nama supaya tampilan
@@ -123,7 +72,14 @@ function mapOrder(row: any): Order {
     tableCode: row.table_code,
     tableSeq: row.table_seq,
     status: row.status,
+    subtotal: row.subtotal,
+    taxableSubtotal: row.taxable_subtotal ?? row.subtotal,
     total: row.total,
+    taxStatus: row.tax_status,
+    taxRateBps: row.tax_rate_bps,
+    taxAmount: row.tax_amount,
+    taxExemptReason: row.tax_exempt_reason,
+    taxApprovedByName: relationName(row.tax_approved_by_employee),
     version: row.version,
     items,
     createdAt: row.created_at,

@@ -63,7 +63,7 @@ export async function login(pin: string): Promise<{ error: string }> {
     role: matched.role,
   });
 
-  redirect("/cashier");
+  redirect("/history");
 }
 
 export async function logout(): Promise<void> {

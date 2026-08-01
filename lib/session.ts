@@ -47,6 +47,6 @@ export async function requireSession(): Promise<Session> {
 
 export async function requireManager(): Promise<Session> {
   const session = await requireSession();
-  if (session.role === "cashier") redirect("/cashier");
+  if (session.role === "cashier") redirect("/history");
   return session;
 }

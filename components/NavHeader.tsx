@@ -12,8 +12,6 @@ interface NavHeaderProps {
 }
 
 const NAV_ITEMS = [
-  { href: "/cashier", label: "Kasir" },
-  { href: "/orders", label: "Daftar Order" },
   { href: "/history", label: "Histori Transaksi" },
   { href: "/dashboard", label: "Dashboard", managerOnly: true },
 ];

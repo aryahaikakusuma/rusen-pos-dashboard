@@ -9,7 +9,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
-const PROTECTED = ["/cashier", "/orders", "/history", "/dashboard"];
+const PROTECTED = ["/history", "/dashboard"];
 const MANAGER_ONLY = ["/dashboard"];
 
 const matches = (pathname: string, roots: string[]) =>
@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/login") {
     return session
-      ? NextResponse.redirect(new URL("/cashier", request.url))
+      ? NextResponse.redirect(new URL("/history", request.url))
       : NextResponse.next();
   }
 
@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (matches(pathname, MANAGER_ONLY) && session.role === "cashier") {
-    return NextResponse.redirect(new URL("/cashier", request.url));
+    return NextResponse.redirect(new URL("/history", request.url));
   }
 
   return NextResponse.next();
@@ -42,8 +42,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/login",
-    "/cashier/:path*",
-    "/orders/:path*",
     "/history/:path*",
     "/dashboard/:path*",
   ],
