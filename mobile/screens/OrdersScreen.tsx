@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 
 import Button from "../components/Button";
@@ -14,7 +15,6 @@ import BillSheet from "../components/BillSheet";
 import ClearHistoryDialog from "../components/ClearHistoryDialog";
 import MenuButton from "../components/MenuButton";
 import OrderDetailSheet from "../components/OrderDetailSheet";
-import PaymentSheet from "../components/PaymentSheet";
 import RefundSheet from "../components/RefundSheet";
 import ShiftBanner from "../components/ShiftBanner";
 import StatusBadge, { type RefundState } from "../components/StatusBadge";
@@ -29,7 +29,6 @@ import {
   getOrder,
   listRecentOrders,
   listRefunds,
-  payOrder,
   refundedQuantities,
   refundTotalsByOrder,
   type HistorySweep,
@@ -42,7 +41,6 @@ import { useGateShift, useShift } from "../lib/shift-context";
 import {
   formatRupiah,
   tableLabel,
-  type PaymentMethod,
   type TaxStatus,
 } from "../lib/types";
 import {
@@ -88,11 +86,11 @@ export default function OrdersScreen({
   const { session } = useAuth();
   const { aktif: shiftAktif } = useShift();
   const gateShift = useGateShift();
+  const router = useRouter();
 
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [unsent, setUnsent] = useState(0);
   const [pushing, setPushing] = useState(false);
-  const [paying, setPaying] = useState<OrderWithItems | null>(null);
   /**
    * Tarif PBJT dari app_state — null kalau katalog belum pernah ditarik sejak
    * rilis ini. Ditahan di layar, bukan dibaca di dalam lembar pembayaran, supaya
@@ -102,7 +100,6 @@ export default function OrdersScreen({
    */
   const [rateBps, setRateBps] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [payError, setPayError] = useState("");
   /** Order yang strukmya sedang dikirim — menyambung Bluetooth perlu sedetik
    *  dua detik, dan tombol yang diam selama itu akan ditekan berulang. */
   const [printingId, setPrintingId] = useState<string | null>(null);
@@ -163,6 +160,16 @@ export default function OrdersScreen({
   useEffect(() => {
     void refresh();
   }, [refresh, refreshToken]);
+
+  // Pelunasan terjadi di rute sebelah (app/pay.tsx) dan menulis ke SQLite
+  // langsung, jadi kembali dari sana harus membaca ulang — kalau tidak, order
+  // yang baru saja lunas tetap tampil "belum lunas" sampai ada hal lain yang
+  // kebetulan menyegarkannya.
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh])
+  );
 
   /**
    * Dipakai untuk tombol "Kirim ulang" maupun percobaan diam-diam setelah
@@ -345,48 +352,6 @@ export default function OrdersScreen({
     } catch (caught) {
       const message = translateOrderError(caught);
       setRefundError(message);
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handlePay = async (
-    method: PaymentMethod,
-    amountReceived: number | null,
-    taxStatus: TaxStatus,
-    taxExemptReason: string | null
-  ) => {
-    if (!gateShift("melunasi order")) return;
-    if (!paying || !session) return;
-    setSubmitting(true);
-    setPayError("");
-    try {
-      await payOrder(db, {
-        orderId: paying.id,
-        method,
-        amountReceived,
-        employeeId: session.employeeId,
-        taxStatus,
-        taxExemptReason,
-      });
-      toast.success(
-        `Order ${tableLabel(paying.table_code, paying.table_seq)} lunas`
-      );
-      const paidId = paying.id;
-      setPaying(null);
-      await refresh();
-
-      // Pemicu cetak otomatis. Sengaja tidak di-await bersama pembayaran:
-      // menyambung Bluetooth bisa memakan beberapa detik, dan lembar pembayaran
-      // tidak boleh menggantung selama itu.
-      void runPrint(paidId, false);
-      // Percobaan kirim di momen yang pasti terjadi. Kalau ada sinyal, order
-      // sampai tanpa kasir perlu memikirkannya; kalau tidak, badge tetap hidup.
-      void push(true);
-    } catch (caught) {
-      const message = translateOrderError(caught);
-      setPayError(message);
       toast.error(message);
     } finally {
       setSubmitting(false);
@@ -581,8 +546,10 @@ export default function OrdersScreen({
                         );
                         return;
                       }
-                      setPayError("");
-                      setPaying(order);
+                      router.push({
+                        pathname: "/pay",
+                        params: { orderId: order.id },
+                      });
                     }}
                   />
                 </View>
@@ -626,19 +593,6 @@ export default function OrdersScreen({
           );
         }}
       />
-
-      {paying && rateBps !== null ? (
-        <PaymentSheet
-          order={paying}
-          taxRateBps={rateBps}
-          submitting={submitting}
-          error={payError}
-          onClose={() => setPaying(null)}
-          onSubmit={(method, amount, taxStatus, reason) =>
-            void handlePay(method, amount, taxStatus, reason)
-          }
-        />
-      ) : null}
 
       {detail ? (
         <OrderDetailSheet order={detail} onClose={() => setDetail(null)} />
