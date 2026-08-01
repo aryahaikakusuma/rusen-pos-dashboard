@@ -2,7 +2,13 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { OrderRow } from "../db/types";
-import { formatRupiah, tableLabel, type PaymentMethod } from "../lib/types";
+import { hitungPbjt, labelPbjt } from "../lib/tax";
+import {
+  formatRupiah,
+  tableLabel,
+  type PaymentMethod,
+  type TaxStatus,
+} from "../lib/types";
 import {
   colors,
   radius,
@@ -16,32 +22,56 @@ import Sheet from "./Sheet";
 
 interface PaymentSheetProps {
   order: OrderRow;
+  /** Tarif PBJT dari app_state. Hanya untuk menampilkan rinciannya. */
+  taxRateBps: number;
   submitting: boolean;
   error: string;
   onClose: () => void;
-  onSubmit: (method: PaymentMethod, amountReceived: number | null) => void;
+  onSubmit: (
+    method: PaymentMethod,
+    amountReceived: number | null,
+    taxStatus: TaxStatus,
+    taxExemptReason: string | null
+  ) => void;
 }
 
 /** Port dari components/PaymentModal.tsx. */
 export default function PaymentSheet({
   order,
+  taxRateBps,
   submitting,
   error,
   onClose,
   onSubmit,
 }: PaymentSheetProps) {
-  const total = order.total;
   const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [taxStatus, setTaxStatus] = useState<TaxStatus>("taxable");
+  const [exemptReason, setExemptReason] = useState("");
   const [amountInput, setAmountInput] = useState("");
+
+  // `order.total` pada order pending masih angka PRA-pajak — pajaknya baru
+  // diputuskan di lembar ini. Membandingkan nominal diterima terhadap angka itu
+  // akan menampilkan kembalian 10% terlalu besar, dan kasir sudah menyerahkan
+  // uangnya sebelum siapa pun sempat memeriksa. Semua perbandingan di bawah
+  // memakai `tagihan`.
+  const subtotal = order.subtotal;
+  // Basisnya taxable_subtotal, bukan subtotal: rokok bukan objek PBJT. Angka di
+  // layar ini harus sama persis dengan yang dihitung payOrder, kalau tidak
+  // kasir menagih satu angka lalu mencatat angka lain.
+  const tax =
+    taxStatus === "exempt" ? 0 : hitungPbjt(order.taxable_subtotal, taxRateBps);
+  const tagihan = subtotal + tax;
 
   const hasAmount = amountInput !== "";
   const amountReceived = hasAmount ? Number(amountInput) : 0;
-  const change = amountReceived - total;
+  const change = amountReceived - tagihan;
 
   // Pemeriksaan di sini hanya untuk umpan balik cepat. payOrder() tetap
   // memvalidasi ulang dan melempar INSUFFICIENT_AMOUNT — kebenaran uang
   // ditentukan di lapisan database, bukan di layar.
-  const ready = method === "cash" ? hasAmount && amountReceived >= total : true;
+  const cashReady = method === "cash" ? hasAmount && amountReceived >= tagihan : true;
+  const reasonReady = taxStatus === "taxable" || exemptReason.trim() !== "";
+  const ready = cashReady && reasonReady;
 
   const tone = !hasAmount ? "neutral" : change >= 0 ? "ok" : "short";
 
@@ -62,14 +92,77 @@ export default function PaymentSheet({
           loading={submitting}
           disabled={!ready}
           onPress={() =>
-            onSubmit(method, method === "cash" ? amountReceived : null)
+            onSubmit(
+              method,
+              method === "cash" ? amountReceived : null,
+              taxStatus,
+              taxStatus === "exempt" ? exemptReason : null
+            )
           }
         />
       }>
       <ScrollView contentContainerStyle={styles.content}>
+        <View>
+          <Text style={styles.fieldLabel}>Status Pajak</Text>
+          <View style={styles.methodRow}>
+            {(
+              [
+                ["taxable", "Kena Pajak"],
+                ["exempt", "Bebas Pajak"],
+              ] as const
+            ).map(([option, label]) => (
+              <Button
+                key={option}
+                label={label}
+                style={[
+                  styles.methodButton,
+                  taxStatus === option && styles.taxActive,
+                ]}
+                onPress={() => {
+                  setTaxStatus(option);
+                  // Keterangan dibuang saat kembali ke kena pajak. Keterangan
+                  // yang menempel pada transaksi yang akhirnya dipungut pajak
+                  // adalah jejak audit yang berbohong — dan constraint di
+                  // Postgres menolaknya juga.
+                  if (option === "taxable") setExemptReason("");
+                }}
+              />
+            ))}
+          </View>
+        </View>
+
+        {taxStatus === "exempt" ? (
+          <View>
+            <Text style={styles.fieldLabel}>Keterangan Bebas Pajak</Text>
+            <TextInput
+              value={exemptReason}
+              onChangeText={setExemptReason}
+              placeholder="Nama instansi atau alasannya"
+              placeholderTextColor={semantic.textSecondary}
+              style={styles.input}
+              editable={!submitting}
+            />
+            <Text style={styles.hint}>
+              Wajib diisi. Tercatat atas nama Anda sebagai yang menyetujui.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.totalBox}>
+          {taxStatus === "taxable" ? (
+            <View style={styles.breakdown}>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Subtotal</Text>
+                <Text style={styles.breakdownValue}>{formatRupiah(subtotal)}</Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>{labelPbjt(taxRateBps)}</Text>
+                <Text style={styles.breakdownValue}>{formatRupiah(tax)}</Text>
+              </View>
+            </View>
+          ) : null}
           <Text style={styles.boxLabel}>Total Tagihan</Text>
-          <Text style={styles.total}>{formatRupiah(total)}</Text>
+          <Text style={styles.total}>{formatRupiah(tagihan)}</Text>
         </View>
 
         <View>
@@ -173,6 +266,38 @@ const styles = StyleSheet.create({
   methodActive: {
     borderColor: colors.primary[600],
     backgroundColor: colors.primary[50],
+  },
+  // Netral gelap, bukan biru. DESIGN.md menyimpan biru untuk aksi utama, dan di
+  // lembar ini aksi utamanya "Konfirmasi Lunas". Status pajak adalah pilihan,
+  // bukan tombol yang dituju kasir — kalau ikut biru, mata tidak bisa
+  // membedakan "ini tombol" dari "ini status" dalam sekali lihat.
+  taxActive: {
+    borderColor: semantic.sidebarActive,
+    backgroundColor: semantic.surfaceMuted,
+  },
+  breakdown: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: semantic.border,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  breakdownLabel: {
+    ...textStyles.body,
+    color: semantic.textSecondary,
+  },
+  breakdownValue: {
+    ...textStyles.bodyStrong,
+    color: semantic.textPrimary,
+  },
+  hint: {
+    ...textStyles.caption,
+    marginTop: spacing.xs,
+    color: semantic.textSecondary,
   },
   cashBlock: {
     gap: spacing.md,

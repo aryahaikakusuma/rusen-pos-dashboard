@@ -9,20 +9,28 @@ import {
 } from "react-native";
 
 import Button from "../components/Button";
-import { catalogPulledAt, listProducts, pullCatalog } from "../db/catalog";
-import { translateOrderError } from "../db/errors";
+import {
+  catalogPulledAt,
+  listProducts,
+  pullCatalog,
+  taxRateBps,
+} from "../db/catalog";
+import { OrderError, translateOrderError } from "../db/errors";
 import {
   appendToOrder,
   checkTableCode,
   clearTestOrders,
   createOrder,
+  createRefund,
   payOrder,
-  TEST_TABLE_PREFIX,
   voidOrderItem,
 } from "../db/orders";
 import { useAuth } from "../lib/auth-context";
 import {
   groupProductVariants,
+  TOPPING_BOXES,
+  toppingMask,
+  toppingValue,
   type ProductEntry,
 } from "../lib/product-variants";
 import {
@@ -221,9 +229,14 @@ async function runSelfTest(
     return;
   }
   const [a, b] = products;
-  // Awalannya dipakai bersama tombol "Hapus data uji" untuk mengenali order
-  // buangan; order sungguhan tidak pernah memakai kode meja berawalan ini.
-  const tableCode = `${TEST_TABLE_PREFIX}${Date.now().toString().slice(-5)}`;
+  // Kode mejanya sekarang biasa saja. Yang menandai order ini sebagai buangan
+  // adalah `testMode` di setiap createOrder di bawah, yang menyalakan kolom
+  // is_test_data — penanda yang sama yang dibaca "Hapus data uji" dan yang
+  // membuat order ini tidak pernah masuk laporan mana pun, di perangkat maupun
+  // di server. Sampai V8 penandanya awalan `UJI-` pada kode meja ini.
+  const tableCode = `UJI ${Date.now().toString().slice(-5)}`;
+  // Dipakai berulang di bawah; alasannya wajib, jadi tidak boleh kosong.
+  const testMode = { reason: "Uji mandiri layar Debug" };
 
   const check = async (label: string, fn: () => Promise<void>) => {
     try {
@@ -257,6 +270,7 @@ async function runSelfTest(
     orderId = await createOrder(db, {
       tableCode,
       employeeId,
+      testMode,
       items: [
         { productId: a.id, quantity: 2, notes: "" },
         { productId: b.id, quantity: 1, notes: "tanpa gula" },
@@ -272,10 +286,31 @@ async function runSelfTest(
     }
   });
 
+  await check("order pending: subtotal = total, pajak belum ada", async () => {
+    // Pajak baru diputuskan saat pelunasan, jadi selama pending kedua angka itu
+    // wajib sama. Kalau berpisah lebih awal, struk sementara dan struk final
+    // akan bercerita dua hal berbeda tentang order yang sama.
+    const row = await db.getFirstAsync<{
+      subtotal: number;
+      total: number;
+      tax_amount: number;
+      tax_status: string;
+    }>(
+      "select subtotal, total, tax_amount, tax_status from orders where id = ?",
+      [orderId]
+    );
+    if (row!.subtotal !== row!.total) {
+      throw new Error(`subtotal ${row!.subtotal} != total ${row!.total}`);
+    }
+    if (row!.tax_amount !== 0) throw new Error(`pajak ${row!.tax_amount}`);
+    if (row!.tax_status !== "taxable") throw new Error(row!.tax_status);
+  });
+
   await check("idempoten: createOrder dengan id sama", async () => {
     const again = await createOrder(db, {
       tableCode,
       employeeId,
+      testMode,
       items: [{ productId: a.id, quantity: 9, notes: "" }],
       orderId,
     });
@@ -291,6 +326,7 @@ async function runSelfTest(
     const second = await createOrder(db, {
       tableCode,
       employeeId,
+      testMode,
       items: [{ productId: a.id, quantity: 1, notes: "" }],
     });
     const row = await db.getFirstAsync<{ table_seq: number }>(
@@ -363,29 +399,84 @@ async function runSelfTest(
         method: "cash",
         amountReceived: 1,
         employeeId,
+        taxStatus: "taxable",
+        taxExemptReason: null,
       })
   );
 
-  await check("pelunasan tunai + kembalian benar", async () => {
-    const order = await db.getFirstAsync<{ total: number }>(
-      "select total from orders where id = ?",
+  await expectThrows(
+    "bebas pajak tanpa keterangan",
+    "TAX_EXEMPT_REASON_REQUIRED",
+    () =>
+      payOrder(db, {
+        orderId,
+        method: "cash",
+        amountReceived: 999_999,
+        employeeId,
+        taxStatus: "exempt",
+        // Spasi saja, bukan string kosong: yang dijaga adalah keterangan yang
+        // TERLIHAT terisi tapi tidak mengatakan apa-apa.
+        taxExemptReason: "   ",
+      })
+  );
+
+  await check("pelunasan kena pajak: aritmetika + kembalian benar", async () => {
+    const order = await db.getFirstAsync<{ subtotal: number }>(
+      "select subtotal from orders where id = ?",
       [orderId]
     );
-    const received = order!.total + 50_000;
+    // Tarif dibaca dari app_state, sama seperti payOrder membacanya. Bukan
+    // angka 1000 yang ditulis di sini: tarif yang dipatok di uji akan tetap
+    // hijau justru ketika tarif sungguhannya salah.
+    const rate = await taxRateBps(db);
+    if (rate === null) throw new Error("tarif PBJT belum ditarik ke perangkat");
+
+    const subtotal = order!.subtotal;
+    // Dihitung ulang di sini, TIDAK dengan memanggil hitungPbjt(). Mengimpor
+    // fungsi yang sedang diuji membuat pemeriksaannya melingkar dan selalu
+    // hijau — pola yang sama dengan regex `strip` di uji varian.
+    const pajak = Math.floor((subtotal * rate + 5000) / 10000);
+    const tagihan = subtotal + pajak;
+    const received = tagihan + 50_000;
+
     await payOrder(db, {
       orderId,
       method: "cash",
       amountReceived: received,
       employeeId,
+      taxStatus: "taxable",
+      taxExemptReason: null,
     });
+
     const paid = await db.getFirstAsync<{
       status: string;
+      subtotal: number;
+      total: number;
+      tax_status: string;
+      tax_rate_bps: number;
+      tax_amount: number;
+      tax_exempt_reason: string | null;
+      tax_approved_by: string | null;
       change_amount: number;
       sync_status: string;
-    }>("select status, change_amount, sync_status from orders where id = ?", [
-      orderId,
-    ]);
+    }>(
+      `select status, subtotal, total, tax_status, tax_rate_bps, tax_amount,
+              tax_exempt_reason, tax_approved_by, change_amount, sync_status
+       from orders where id = ?`,
+      [orderId]
+    );
     if (paid?.status !== "paid") throw new Error("status bukan paid");
+    if (paid.subtotal !== subtotal) throw new Error(`subtotal ${paid.subtotal}`);
+    if (paid.tax_amount !== pajak) throw new Error(`pajak ${paid.tax_amount}`);
+    if (paid.total !== tagihan) throw new Error(`total ${paid.total}`);
+    if (paid.tax_rate_bps !== rate) throw new Error(`tarif ${paid.tax_rate_bps}`);
+    if (paid.tax_status !== "taxable") throw new Error(paid.tax_status);
+    // Order kena pajak tidak boleh membawa sisa keterangan pembebasan —
+    // constraint di Postgres menolaknya, jadi order seperti itu tidak akan
+    // pernah bisa disinkronkan.
+    if (paid.tax_exempt_reason !== null || paid.tax_approved_by !== null) {
+      throw new Error("keterangan bebas pajak tertinggal di order kena pajak");
+    }
     if (paid.change_amount !== 50_000) {
       throw new Error(`kembalian ${paid.change_amount}`);
     }
@@ -394,13 +485,29 @@ async function runSelfTest(
     }
   });
 
-  await check("pelunasan idempoten, payments tetap satu baris", async () => {
+  await check("pelunasan idempoten, pajak tidak berlipat", async () => {
+    const sebelum = await db.getFirstAsync<{ total: number; tax_amount: number }>(
+      "select total, tax_amount from orders where id = ?",
+      [orderId]
+    );
     await payOrder(db, {
       orderId,
       method: "cash",
       amountReceived: 999_999,
       employeeId,
+      taxStatus: "taxable",
+      taxExemptReason: null,
     });
+    const sesudah = await db.getFirstAsync<{ total: number; tax_amount: number }>(
+      "select total, tax_amount from orders where id = ?",
+      [orderId]
+    );
+    if (sesudah!.total !== sebelum!.total) {
+      throw new Error(`total berubah jadi ${sesudah!.total}`);
+    }
+    if (sesudah!.tax_amount !== sebelum!.tax_amount) {
+      throw new Error(`pajak berubah jadi ${sesudah!.tax_amount}`);
+    }
     const n = await db.getFirstAsync<{ n: number }>(
       "select count(*) as n from payments where order_id = ?",
       [orderId]
@@ -416,10 +523,300 @@ async function runSelfTest(
     })
   );
 
+  await check("pelunasan bebas pajak: nol pajak, jejak lengkap", async () => {
+    const bebas = await createOrder(db, {
+      tableCode: `${tableCode}-BP`,
+      employeeId,
+      testMode,
+      items: [{ productId: b.id, quantity: 1, notes: "" }],
+    });
+    await payOrder(db, {
+      orderId: bebas,
+      method: "non_cash",
+      amountReceived: null,
+      employeeId,
+      taxStatus: "exempt",
+      taxExemptReason: "  Dinas Pendidikan  ",
+    });
+    const row = await db.getFirstAsync<{
+      subtotal: number;
+      total: number;
+      tax_status: string;
+      tax_rate_bps: number;
+      tax_amount: number;
+      tax_exempt_reason: string;
+      tax_approved_by: string;
+    }>(
+      `select subtotal, total, tax_status, tax_rate_bps, tax_amount,
+              tax_exempt_reason, tax_approved_by
+       from orders where id = ?`,
+      [bebas]
+    );
+    if (row!.tax_status !== "exempt") throw new Error(row!.tax_status);
+    if (row!.tax_amount !== 0) throw new Error(`pajak ${row!.tax_amount}`);
+    if (row!.total !== row!.subtotal) {
+      throw new Error(`total ${row!.total} != subtotal ${row!.subtotal}`);
+    }
+    // Keterangan disimpan sudah dipangkas — yang tersimpan harus sama persis
+    // dengan yang kelak terbaca di laporan, bukan versi berspasi.
+    if (row!.tax_exempt_reason !== "Dinas Pendidikan") {
+      throw new Error(`keterangan "${row!.tax_exempt_reason}"`);
+    }
+    if (row!.tax_approved_by !== employeeId) {
+      throw new Error("penyetuju bukan kasir yang sedang login");
+    }
+    // Tarif tetap di-snapshot walau tidak dipungut. Tanpa ini, "berapa pajak
+    // yang tidak jadi ditagih" hilang begitu perda mengubah tarif.
+    if (row!.tax_rate_bps <= 0) {
+      throw new Error("tarif tidak ikut tersimpan pada order bebas pajak");
+    }
+  });
+
+  // ---------------------------------------------------------------- refund
+  //
+  // Aritmetika refund gagal DIAM-DIAM: pajak yang salah sedikit tetap tampil
+  // wajar di layar, dan baru terlihat saat laporan pajak tidak cocok dengan
+  // laci. Pemeriksaan di bawah menghitung ulang angkanya secara inline, bukan
+  // dengan memanggil hitungPbjt — mengimpor fungsi yang sedang diuji membuat
+  // pemeriksaannya melingkar dan selalu hijau.
+  await check("refund sebagian: pajak proporsional, order tak berubah", async () => {
+    const rate = await taxRateBps(db);
+    if (rate === null) throw new Error("tarif PBJT belum ditarik ke perangkat");
+
+    const oid = await createOrder(db, {
+      tableCode: `${tableCode}-R1`,
+      employeeId,
+      testMode,
+      items: [{ productId: a.id, quantity: 2, notes: "" }],
+    });
+    await payOrder(db, {
+      orderId: oid,
+      method: "non_cash",
+      amountReceived: null,
+      employeeId,
+      taxStatus: "taxable",
+      taxExemptReason: null,
+    });
+
+    const sebelum = await db.getFirstAsync<{
+      subtotal: number;
+      tax_amount: number;
+      total: number;
+      version: number;
+    }>("select subtotal, tax_amount, total, version from orders where id = ?", [
+      oid,
+    ]);
+    const item = await db.getFirstAsync<{ id: string; unit_price: number }>(
+      "select id, unit_price from order_items where order_id = ?",
+      [oid]
+    );
+
+    await createRefund(db, {
+      orderId: oid,
+      employeeId,
+      reason: "salah pesan",
+      items: [{ orderItemId: item!.id, quantity: 1 }],
+    });
+
+    const refund = await db.getFirstAsync<{
+      subtotal: number;
+      tax_amount: number;
+      amount: number;
+      reason: string;
+    }>("select subtotal, tax_amount, amount, reason from refunds where order_id = ?", [
+      oid,
+    ]);
+
+    const pokok = item!.unit_price;
+    const pajak = Math.floor((pokok * rate + 5000) / 10000);
+    if (refund!.subtotal !== pokok) throw new Error(`pokok ${refund!.subtotal}`);
+    if (refund!.tax_amount !== pajak) throw new Error(`pajak ${refund!.tax_amount}`);
+    if (refund!.amount !== pokok + pajak) throw new Error(`jumlah ${refund!.amount}`);
+
+    // Yang paling penting: baris order TIDAK bergeser sepeser pun. `total`
+    // adalah yang sudah ditagihkan dan sudah tercetak di struk pelanggan.
+    const sesudah = await db.getFirstAsync<{
+      subtotal: number;
+      tax_amount: number;
+      total: number;
+      version: number;
+      sync_status: string;
+    }>(
+      `select subtotal, tax_amount, total, version, sync_status
+       from orders where id = ?`,
+      [oid]
+    );
+    if (
+      sesudah!.subtotal !== sebelum!.subtotal ||
+      sesudah!.tax_amount !== sebelum!.tax_amount ||
+      sesudah!.total !== sebelum!.total
+    ) {
+      throw new Error("baris order berubah oleh refund");
+    }
+    // Versi WAJIB naik: push_order langsung return kalau versinya tidak lebih
+    // tinggi, dan refundnya tidak akan pernah tersisip — dengan jawaban sukses.
+    if (sesudah!.version <= sebelum!.version) {
+      throw new Error("versi tidak naik, refund tidak akan pernah terkirim");
+    }
+    if (sesudah!.sync_status !== "pending") {
+      throw new Error("order tidak kembali ke antrean kirim");
+    }
+  });
+
+  await check("refund sampai habis menutup pajak PERSIS", async () => {
+    const oid = await createOrder(db, {
+      tableCode: `${tableCode}-R2`,
+      employeeId,
+      testMode,
+      items: [{ productId: a.id, quantity: 3, notes: "" }],
+    });
+    await payOrder(db, {
+      orderId: oid,
+      method: "non_cash",
+      amountReceived: null,
+      employeeId,
+      taxStatus: "taxable",
+      taxExemptReason: null,
+    });
+    const item = await db.getFirstAsync<{ id: string }>(
+      "select id from order_items where order_id = ?",
+      [oid]
+    );
+
+    // Dipecah tiga. Kalau tiap bagian hanya memakai rumus, pembulatannya bisa
+    // menyisakan rupiah yang tidak pernah bisa dikembalikan; aturan "sisa" di
+    // refund terakhir yang menutupnya.
+    for (let i = 0; i < 3; i += 1) {
+      await createRefund(db, {
+        orderId: oid,
+        employeeId,
+        reason: null,
+        items: [{ orderItemId: item!.id, quantity: 1 }],
+      });
+    }
+
+    const total = await db.getFirstAsync<{
+      pokok: number;
+      pajak: number;
+      uang: number;
+    }>(
+      `select coalesce(sum(subtotal), 0) as pokok,
+              coalesce(sum(tax_amount), 0) as pajak,
+              coalesce(sum(amount), 0) as uang
+       from refunds where order_id = ?`,
+      [oid]
+    );
+    const order = await db.getFirstAsync<{
+      subtotal: number;
+      tax_amount: number;
+      total: number;
+    }>("select subtotal, tax_amount, total from orders where id = ?", [oid]);
+
+    if (total!.pokok !== order!.subtotal) throw new Error(`pokok ${total!.pokok}`);
+    if (total!.pajak !== order!.tax_amount) throw new Error(`pajak ${total!.pajak}`);
+    if (total!.uang !== order!.total) throw new Error(`uang ${total!.uang}`);
+  });
+
+  await check("refund order bebas pajak mengembalikan pajak nol", async () => {
+    const oid = await createOrder(db, {
+      tableCode: `${tableCode}-R3`,
+      employeeId,
+      testMode,
+      items: [{ productId: b.id, quantity: 1, notes: "" }],
+    });
+    await payOrder(db, {
+      orderId: oid,
+      method: "non_cash",
+      amountReceived: null,
+      employeeId,
+      taxStatus: "exempt",
+      taxExemptReason: "Dinas Pendidikan",
+    });
+    const item = await db.getFirstAsync<{ id: string }>(
+      "select id from order_items where order_id = ?",
+      [oid]
+    );
+    await createRefund(db, {
+      orderId: oid,
+      employeeId,
+      reason: null,
+      items: [{ orderItemId: item!.id, quantity: 1 }],
+    });
+    const refund = await db.getFirstAsync<{ tax_amount: number; amount: number; subtotal: number }>(
+      "select tax_amount, amount, subtotal from refunds where order_id = ?",
+      [oid]
+    );
+    if (refund!.tax_amount !== 0) throw new Error(`pajak ${refund!.tax_amount}`);
+    if (refund!.amount !== refund!.subtotal) {
+      throw new Error("jumlah tidak sama dengan pokok pada order bebas pajak");
+    }
+  });
+
+  await check("refund melebihi sisa ditolak", async () => {
+    const oid = await createOrder(db, {
+      tableCode: `${tableCode}-R4`,
+      employeeId,
+      testMode,
+      items: [{ productId: b.id, quantity: 1, notes: "" }],
+    });
+    await payOrder(db, {
+      orderId: oid,
+      method: "non_cash",
+      amountReceived: null,
+      employeeId,
+      taxStatus: "taxable",
+      taxExemptReason: null,
+    });
+    const item = await db.getFirstAsync<{ id: string }>(
+      "select id from order_items where order_id = ?",
+      [oid]
+    );
+    let ditolak = false;
+    try {
+      await createRefund(db, {
+        orderId: oid,
+        employeeId,
+        reason: null,
+        items: [{ orderItemId: item!.id, quantity: 2 }],
+      });
+    } catch (caught) {
+      ditolak = caught instanceof OrderError
+        && caught.code === "REFUND_QUANTITY_INVALID";
+    }
+    if (!ditolak) throw new Error("refund melebihi jumlah item tidak ditolak");
+
+    // Dan tidak boleh ada baris yang tertinggal dari percobaan yang gagal.
+    const n = await db.getFirstAsync<{ n: number }>(
+      "select count(*) as n from refunds where order_id = ?",
+      [oid]
+    );
+    if (n?.n !== 0) throw new Error(`${n?.n} refund tertinggal setelah ditolak`);
+  });
+
+  await expectThrows("refund order yang belum lunas", "REFUND_NOT_ALLOWED", async () => {
+    const oid = await createOrder(db, {
+      tableCode: `${tableCode}-R5`,
+      employeeId,
+      testMode,
+      items: [{ productId: b.id, quantity: 1, notes: "" }],
+    });
+    const item = await db.getFirstAsync<{ id: string }>(
+      "select id from order_items where order_id = ?",
+      [oid]
+    );
+    await createRefund(db, {
+      orderId: oid,
+      employeeId,
+      reason: null,
+      items: [{ orderItemId: item!.id, quantity: 1 }],
+    });
+  });
+
   await check("void seluruh item mengubah order jadi void", async () => {
     const fresh = await createOrder(db, {
       tableCode: `${tableCode}-V`,
       employeeId,
+      testMode,
       items: [{ productId: b.id, quantity: 1, notes: "" }],
     });
     const item = await db.getFirstAsync<{ id: string }>(
@@ -484,23 +881,103 @@ async function runVariantChecks(
     ok("semua produk terwakili tepat sekali");
   }
 
-  // 2. Satu entry tidak boleh punya dua opsi bersuhu sama — itu akan memunculkan
-  //    lembar dengan dua tombol "Panas".
+  // 2. Satu entry tidak boleh punya dua opsi bervarian sama — itu akan
+  //    memunculkan lembar dengan dua tombol "Panas".
   const duplicateVariant = entries.find(
-    (e) => new Set(e.options.map((o) => o.variant)).size !== e.options.length
+    (e) => new Set(e.options.map((o) => o.value)).size !== e.options.length
   );
   if (duplicateVariant) {
-    fail("tidak ada suhu kembar dalam satu kartu", `"${duplicateVariant.label}"`);
+    fail("tidak ada varian kembar dalam satu kartu", `"${duplicateVariant.label}"`);
   } else {
-    ok("tidak ada suhu kembar dalam satu kartu");
+    ok("tidak ada varian kembar dalam satu kartu");
   }
 
   // 3. Panas selalu opsi pertama, supaya posisi tombol tidak berpindah antar menu.
-  const wrongOrder = paired.find((e) => e.options[0].variant !== "panas");
+  const wrongOrder = paired
+    .filter((e) => e.kind === "suhu")
+    .find((e) => e.options[0].value !== "panas");
   if (wrongOrder) {
     fail("panas selalu di urutan pertama", `"${wrongOrder.label}"`);
   } else {
     ok("panas selalu di urutan pertama");
+  }
+
+  // 3b. Poros saus: Ori pertama DAN tersorot lebih dulu. Keduanya diperiksa
+  //     bersama karena urutan tanpa sorotan hanya menghasilkan tombol yang
+  //     kebetulan di kiri atas, bukan varian bawaan.
+  const saus = paired.filter((e) => e.kind === "saus");
+  const wrongOri = saus.find(
+    (e) => e.options[0].value !== "ori" || e.defaultValue !== "ori"
+  );
+  if (wrongOri) {
+    fail("ori selalu pertama dan jadi bawaan", `"${wrongOri.label}"`);
+  } else {
+    ok("ori selalu pertama dan jadi bawaan");
+  }
+
+  // 3b-2. Poros topping: Polos pertama dan jadi bawaan, kedelapan kombinasinya
+  //       ada, dan harganya benar-benar penjumlahan. Ketiganya diam kalau salah
+  //       — kombinasi yang hilang cuma membuat kotaknya mati di layar, dan satu
+  //       harga yang salah ketik tetap terlihat wajar; selisihnya baru muncul
+  //       saat laporan tidak cocok dengan laci.
+  const topping = paired.filter((e) => e.kind === "topping");
+  const wrongTopping = topping.find((e) => {
+    if (e.options[0].value !== "polos" || e.defaultValue !== "polos") return true;
+    if (e.options.length !== 1 << TOPPING_BOXES.length) return true;
+    const harga = new Map(e.options.map((o) => [o.value, o.product.price]));
+    const dasar = harga.get("polos");
+    if (dasar === undefined) return true;
+    const tambahan = TOPPING_BOXES.map(
+      (_, bit) => (harga.get(toppingValue(1 << bit)) ?? NaN) - dasar
+    );
+    return e.options.some((o) => {
+      const mask = toppingMask(o.value);
+      const jumlah = tambahan.reduce(
+        (n, t, bit) => n + (mask & (1 << bit) ? t : 0),
+        dasar
+      );
+      return o.product.price !== jumlah;
+    });
+  });
+  if (wrongTopping) {
+    fail("topping lengkap dan harganya menjumlah", `"${wrongTopping.label}"`);
+  } else {
+    ok("topping lengkap dan harganya menjumlah");
+  }
+
+  // 3b-3. Jenis kuah hanya menempel di Indomie Kuah, dan wajib dipilih. Kalau
+  //       ia bocor ke Indomie Goreng, kasir diminta memilih kuah untuk mi
+  //       goreng dan tombol Tambah tidak akan pernah menyala sebelum ia menebak.
+  const salahKuah = entries.find(
+    (e) =>
+      Boolean(e.extra) !== (e.kind === "topping" && /\bkuah\b/i.test(e.label)) ||
+      (e.extra ? e.extra.defaultValue !== null : false)
+  );
+  if (salahKuah) {
+    fail("jenis kuah hanya di menu berkuah", `"${salahKuah.label}"`);
+  } else {
+    ok("jenis kuah hanya di menu berkuah");
+  }
+
+  // 3c. Poros suhu TIDAK boleh punya varian bawaan. Menyorot panas lebih dulu
+  //     berarti menaruh ibu jari di timbangan menu yang laku, dan itu keputusan
+  //     produk yang tidak pernah diambil siapa pun.
+  const suhuBawaan = paired.find(
+    (e) => e.kind === "suhu" && e.defaultValue !== null
+  );
+  if (suhuBawaan) {
+    fail("suhu tidak punya varian bawaan", `"${suhuBawaan.label}"`);
+  } else {
+    ok("suhu tidak punya varian bawaan");
+  }
+
+  // 3d. Satu kartu tidak pernah mencampur dua poros. Kalau ini merah, ada nama
+  //     produk yang terbaca sebagai suhu sekaligus saus.
+  const campur = paired.find((e) => e.kind === null);
+  if (campur) {
+    fail("kartu gabungan selalu punya satu poros", `"${campur.label}"`);
+  } else {
+    ok("kartu gabungan selalu punya satu poros");
   }
 
   // 4. Rentang harga cocok dengan opsi yang benar-benar ada.
@@ -525,12 +1002,18 @@ async function runVariantChecks(
   }
 
   // 6. Inti aturannya: dua produk sekategori yang namanya hanya berbeda pada
-  //    penanda suhu WAJIB berada di kartu yang sama. Normalisasi di bawah ini
+  //    penanda varian WAJIB berada di kartu yang sama. Normalisasi di bawah ini
   //    sengaja ditulis ulang di sini, tidak diimpor dari modulnya — kalau ia
   //    mengimpor regex yang sama, pemeriksaan ini jadi memutar dan selalu lolos
   //    meski aturannya rusak. Inilah yang menangkap hilangnya akhiran "S".
   const strip = (name: string) =>
-    name.replace(/\s+(panas|dingin|es|s)$/i, "").trim().toLowerCase();
+    name
+      .replace(
+        /\s+(panas|dingin|es|s|mayonnaise|bangkok|mentega|lada hitam|teriyaki|polos|sayur \+ telur \+ sosis|sayur \+ telur|telur \+ sosis|sayur \+ sosis|sayur|telur|sosis)$/i,
+        ""
+      )
+      .trim()
+      .toLowerCase();
   const entryOfProduct = new Map<string, ProductEntry>();
   for (const entry of entries) {
     for (const option of entry.options) entryOfProduct.set(option.product.id, entry);
@@ -548,9 +1031,9 @@ async function runVariantChecks(
     if (separated) break;
   }
   if (separated) {
-    fail("pasangan suhu selalu satu kartu", separated);
+    fail("pasangan varian selalu satu kartu", separated);
   } else {
-    ok("pasangan suhu selalu satu kartu");
+    ok("pasangan varian selalu satu kartu");
   }
 
   // Informasi, bukan asersi. Angkanya berguna dilihat manusia — saat rencana ini

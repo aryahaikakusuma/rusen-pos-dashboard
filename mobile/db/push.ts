@@ -23,6 +23,17 @@ export interface PushResult {
   failed: number;
   /** Sisa yang masih belum terkirim setelah percobaan ini. */
   remaining: number;
+  /**
+   * Pesan kegagalan terakhir, apa adanya dari server. null kalau tidak ada yang
+   * gagal.
+   *
+   * Ikut dikembalikan karena layar Order dulu hanya bisa berkata "Belum bisa
+   * mengirim, periksa koneksi" — satu kalimat untuk semua sebab. Padahal
+   * koneksi hanya salah satunya: sesi yang kedaluwarsa dan RPC yang belum ada
+   * di server memberi gejala yang sama persis, dan keduanya tidak akan pernah
+   * membaik dengan menekan Kirim ulang.
+   */
+  lastError: string | null;
 }
 
 interface VoidRow {
@@ -69,6 +80,7 @@ export async function pushPending(db: SQLiteDatabase): Promise<PushResult> {
 
   let sent = 0;
   let failed = 0;
+  let lastError: string | null = null;
 
   for (const order of orders) {
     try {
@@ -81,6 +93,7 @@ export async function pushPending(db: SQLiteDatabase): Promise<PushResult> {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Gagal mengirim order";
+      lastError = message;
       await db.runAsync(
         "update orders set sync_status = 'error', sync_error = ? where id = ?",
         [message, order.id]
@@ -89,11 +102,31 @@ export async function pushPending(db: SQLiteDatabase): Promise<PushResult> {
     }
   }
 
-  return { sent, failed, remaining: await countUnsent(db) };
+  return { sent, failed, remaining: await countUnsent(db), lastError };
+}
+
+interface RefundRow {
+  id: string;
+  order_id: string;
+  subtotal: number;
+  tax_amount: number;
+  amount: number;
+  reason: string | null;
+  employee_id: string;
+  created_at: string;
+}
+
+interface RefundItemRow {
+  id: string;
+  refund_id: string;
+  order_item_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
 }
 
 async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
-  const [items, voids, payment] = await Promise.all([
+  const [items, voids, payment, refunds] = await Promise.all([
     db.getAllAsync<OrderItemRow>(
       "select * from order_items where order_id = ?",
       [order.id]
@@ -106,14 +139,44 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
       "select * from payments where order_id = ? order by created_at limit 1",
       [order.id]
     ),
+    db.getAllAsync<RefundRow>(
+      "select * from refunds where order_id = ? order by created_at",
+      [order.id]
+    ),
   ]);
+
+  // Item tiap refund diambil terpisah. Urutan refund dipertahankan karena
+  // push_order memasukkannya satu per satu dan batas kumulatifnya diperiksa
+  // setelah semuanya masuk.
+  const refundItems = await Promise.all(
+    refunds.map((refund) =>
+      db.getAllAsync<RefundItemRow>(
+        "select * from refund_items where refund_id = ? order by rowid",
+        [refund.id]
+      )
+    )
+  );
 
   return {
     id: order.id,
     table_code: order.table_code,
     table_seq: order.table_seq,
     status: order.status,
+    // Daftar kolom ini EKSPLISIT: apa pun yang tidak disebut di sini tidak
+    // pernah sampai ke server, tanpa satu pun galat. Kolom pajak di bawah wajib
+    // ikut — tanpanya push_order membaca subtotal sebagai total, menghitung
+    // pajak nol, lalu menolak setiap order lunas dengan TOTAL_MISMATCH.
+    subtotal: order.subtotal,
+    // Basis pajaknya. Tanpa ini push_order jatuh ke perilaku lama — basis =
+    // seluruh subtotal — dan setiap order berisi rokok ditolak TAX_MISMATCH,
+    // karena perangkat sudah menghitung pajaknya dari basis yang lebih kecil.
+    taxable_subtotal: order.taxable_subtotal,
     total: order.total,
+    tax_status: order.tax_status,
+    tax_rate_bps: order.tax_rate_bps,
+    tax_amount: order.tax_amount,
+    tax_exempt_reason: order.tax_exempt_reason,
+    tax_approved_by: order.tax_approved_by,
     version: order.version,
     created_by: order.created_by,
     paid_by: order.paid_by,
@@ -126,6 +189,12 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
     paid_at: order.paid_at,
     voided_at: order.voided_at,
     void_reason: order.void_reason,
+    // Tanpa dua bidang ini order uji sampai ke server sebagai order biasa dan
+    // ikut terhitung di setiap laporan — persis lubang yang ditutup 0022/0023,
+    // dan tanpa satu pun galat kalau terlewat. Server hanya membacanya saat
+    // PENYISIPAN; pada pembaruan keduanya diabaikan.
+    is_test_data: order.is_test_data === 1,
+    test_mode_reason: order.test_mode_reason,
     // outlet_id sengaja tidak dikirim. Server mengambilnya dari baris employees
     // penulisnya, jadi perangkat tidak bisa menitipkan order ke outlet lain.
     items: items.map((item) => ({
@@ -136,6 +205,10 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
       quantity: item.quantity,
       unit_price: item.unit_price,
       notes: item.notes,
+      // Snapshot, ikut apa adanya. Server memakainya untuk menjumlahkan ulang
+      // basis pajak dan membandingkannya dengan taxable_subtotal di atas —
+      // penjaga TAXABLE_SUM_MISMATCH di 0020.
+      taxable: item.taxable === 1,
     })),
     voids: voids.map((entry) => ({
       id: entry.id,
@@ -156,6 +229,25 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
           created_at: payment.created_at,
         }
       : null,
+    // Refund ikut di kiriman order yang sama, bukan antrean sendiri: id-nya
+    // buatan perangkat dan push_order menyisipkannya dengan `on conflict do
+    // nothing`, jadi mengirim ulang tidak pernah menggandakan uang keluar.
+    refunds: refunds.map((refund, i) => ({
+      id: refund.id,
+      subtotal: refund.subtotal,
+      tax_amount: refund.tax_amount,
+      amount: refund.amount,
+      reason: refund.reason,
+      employee_id: refund.employee_id,
+      created_at: refund.created_at,
+      items: refundItems[i].map((item) => ({
+        id: item.id,
+        order_item_id: item.order_item_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
+    })),
   };
 }
 

@@ -16,22 +16,41 @@ import type { CategoryRow, ProductRow } from "./types";
 export interface CatalogPullResult {
   categories: number;
   products: number;
+  taxRateBps: number;
   pulledAt: string;
 }
 
 export async function pullCatalog(
   db: SQLiteDatabase
 ): Promise<CatalogPullResult> {
-  const [categories, products] = await Promise.all([
-    supabase.from("categories").select("id, outlet_id, code, name, sort_order, active"),
+  const [categories, products, outlets] = await Promise.all([
+    // `taxable` menentukan kategori mana yang bukan objek PBJT (0019). Ikut
+    // ditarik di sini, bukan ditebak dari kode kategori: perangkat menghitung
+    // pajak saat offline, dan kode yang mencocokkan nama akan diam-diam salah
+    // begitu kategori diganti namanya.
+    supabase
+      .from("categories")
+      .select("id, outlet_id, code, name, sort_order, active, taxable"),
     supabase.from("products").select("id, outlet_id, category_id, code, name, price, active"),
+    // Tarif PBJT ikut ditarik di sini supaya perangkat bisa menghitung pajak
+    // saat offline. 0012 memberi hak SELECT tingkat kolom pada outlets —
+    // alamat outlet tidak ikut turun.
+    supabase.from("outlets").select("id, tax_rate_bps").limit(1).maybeSingle(),
   ]);
 
   if (categories.error) throw new Error(categories.error.message);
   if (products.error) throw new Error(products.error.message);
+  // Dilempar sama kerasnya dengan dua di atas, bukan didiamkan. Tarikan
+  // separuh jadi yang meninggalkan tarif basi di samping katalog baru adalah
+  // cacat uang, dan diamnya jauh lebih mahal daripada gagalnya.
+  if (outlets.error) throw new Error(outlets.error.message);
 
   const categoryRows = (categories.data ?? []) as CategoryRow[];
   const productRows = (products.data ?? []) as ProductRow[];
+  const taxRateBps = (outlets.data as { tax_rate_bps: number } | null)?.tax_rate_bps;
+  if (typeof taxRateBps !== "number") {
+    throw new Error("Tarif PBJT tidak terbaca dari server.");
+  }
   const pulledAt = new Date().toISOString();
 
   await db.withExclusiveTransactionAsync(async (txn) => {
@@ -45,7 +64,7 @@ export async function pullCatalog(
     await upsertChunked(
       txn,
       "categories",
-      ["id", "outlet_id", "code", "name", "sort_order", "active"],
+      ["id", "outlet_id", "code", "name", "sort_order", "active", "taxable"],
       categoryRows.map((c) => [
         c.id,
         c.outlet_id,
@@ -53,6 +72,10 @@ export async function pullCatalog(
         c.name,
         c.sort_order,
         c.active ? 1 : 0,
+        // `?? true` bukan hiasan: server yang belum menjalankan 0019 tidak
+        // mengirim kolom ini sama sekali, dan kena pajak adalah bawaan yang
+        // aman. Bebas pajak harus selalu berupa pernyataan yang tegas.
+        (c.taxable ?? 1) ? 1 : 0,
       ])
     );
 
@@ -82,6 +105,15 @@ export async function pullCatalog(
       );
     }
 
+    // Ditulis di transaksi yang sama dengan katalognya. Tarif dan harga harus
+    // berasal dari satu tarikan yang sama; keduanya terpisah berarti pajak
+    // dihitung dari tarif satu zaman atas harga zaman lain.
+    await txn.runAsync(
+      `insert into app_state (key, value) values ('tax_rate_bps', ?)
+       on conflict(key) do update set value = excluded.value`,
+      [String(taxRateBps)]
+    );
+
     await txn.runAsync(
       `insert into app_state (key, value) values ('catalog_pulled_at', ?)
        on conflict(key) do update set value = excluded.value`,
@@ -92,8 +124,26 @@ export async function pullCatalog(
   return {
     categories: categoryRows.length,
     products: productRows.length,
+    taxRateBps,
     pulledAt,
   };
+}
+
+/**
+ * Tarif PBJT yang tersimpan di perangkat, basis point — null kalau katalog
+ * belum pernah ditarik sejak rilis ini.
+ *
+ * Sengaja TIDAK ada nilai bawaan kalau null. Angka pajak yang ditebak sendiri
+ * oleh perangkat adalah angka yang salah tanpa ada yang tahu; menolak melayani
+ * pembayaran sampai tarifnya ditarik jauh lebih jujur, dan obatnya satu ketukan.
+ */
+export async function taxRateBps(db: SQLiteDatabase): Promise<number | null> {
+  const row = await db.getFirstAsync<{ value: string }>(
+    "select value from app_state where key = 'tax_rate_bps'"
+  );
+  if (!row) return null;
+  const parsed = Number(row.value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**

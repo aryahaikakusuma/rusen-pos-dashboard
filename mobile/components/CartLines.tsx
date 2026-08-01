@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { formatRupiah, type DraftItem } from "../lib/types";
+import { draftLineKey, formatRupiah, type DraftItem } from "../lib/types";
 import {
   colors,
   radius,
@@ -39,8 +39,10 @@ export default function CartLines({
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {items.map((item) => (
-        <View key={item.productId} style={styles.line}>
+      {items.map((item) => {
+        const lineKey = draftLineKey(item);
+        return (
+        <View key={lineKey} style={styles.line}>
           <View style={styles.lineHeader}>
             <View style={styles.lineTitle}>
               <Text style={styles.name}>{item.productName}</Text>
@@ -51,7 +53,7 @@ export default function CartLines({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Hapus ${item.productName}`}
-              onPress={() => onRemove(item.productId)}
+              onPress={() => onRemove(lineKey)}
               disabled={disabled}
               style={({ pressed }) => [
                 styles.remove,
@@ -69,7 +71,7 @@ export default function CartLines({
                 accessibilityLabel="Kurangi jumlah"
                 disabled={disabled}
                 onPress={() =>
-                  onUpdateQuantity(item.productId, item.quantity - 1)
+                  onUpdateQuantity(lineKey, item.quantity - 1)
                 }
               />
               <Text style={styles.quantity}>{item.quantity}</Text>
@@ -78,7 +80,7 @@ export default function CartLines({
                 accessibilityLabel="Tambah jumlah"
                 disabled={disabled}
                 onPress={() =>
-                  onUpdateQuantity(item.productId, item.quantity + 1)
+                  onUpdateQuantity(lineKey, item.quantity + 1)
                 }
               />
             </View>
@@ -93,7 +95,8 @@ export default function CartLines({
             </View>
           </View>
         </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }

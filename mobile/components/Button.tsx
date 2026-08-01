@@ -5,6 +5,7 @@ import {
   Text,
   View,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 
@@ -28,6 +29,13 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   loadingLabel?: string;
+  /**
+   * Wajib diisi kalau `label` hanya ikon. Tanpa ini tombolnya tak bernama bagi
+   * pembaca layar, dan emoji dibacakan apa adanya ("sapu") tanpa menyebut apa
+   * yang akan terjadi.
+   */
+  accessibilityLabel?: string;
+  labelStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -38,6 +46,8 @@ export default function Button({
   disabled,
   loading,
   loadingLabel,
+  accessibilityLabel,
+  labelStyle,
   style,
 }: ButtonProps) {
   const inactive = disabled || loading;
@@ -45,6 +55,7 @@ export default function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: Boolean(inactive) }}
       onPress={onPress}
       disabled={inactive}
@@ -60,12 +71,14 @@ export default function Button({
           <ActivityIndicator
             color={variant === "primary" ? colors.neutral[0] : colors.neutral[600]}
           />
-          <Text style={[styles.label, styles[`${variant}Label`]]}>
+          <Text style={[styles.label, styles[`${variant}Label`], labelStyle]}>
             {loadingLabel ?? label}
           </Text>
         </View>
       ) : (
-        <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+        <Text style={[styles.label, styles[`${variant}Label`], labelStyle]}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );

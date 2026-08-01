@@ -42,12 +42,13 @@
         "projectId": "247500bf-2f97-4582-bcac-594ded5ea4e1"
       }
     },
-    "runtimeVersion": {
-      "policy": "fingerprint"
-    },
+    "runtimeVersion": "2",
     "updates": {
       "url": "https://u.expo.dev/247500bf-2f97-4582-bcac-594ded5ea4e1",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }

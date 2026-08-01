@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./env";
-import { clearSession, loadSession, saveSession } from "./session";
+import { clearSession, saveSession } from "./session";
 import { PIN_LENGTH, type Session } from "./types";
 
 /**
@@ -33,15 +33,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [restoring, setRestoring] = useState(true);
 
+  // Sesi tersimpan TIDAK dipulihkan di sini dengan sengaja: setiap kali
+  // aplikasi dibuka dari awal (proses baru, bukan sekadar kembali dari
+  // background), kasir harus memasukkan PIN. Token lama dihapus juga, bukan
+  // hanya diabaikan, supaya tidak ada sesi basi yang menunggu untuk dipulihkan
+  // lain waktu. Sesi tetap hidup di memori selama proses aplikasi berjalan —
+  // membuka menu, mengunci layar, atau berpindah aplikasi sebentar tidak
+  // meminta PIN lagi, hanya proses baru yang meminta.
   useEffect(() => {
     let cancelled = false;
-    loadSession()
-      .then((restored) => {
-        if (!cancelled) setSession(restored);
-      })
-      .finally(() => {
-        if (!cancelled) setRestoring(false);
-      });
+    clearSession().finally(() => {
+      if (!cancelled) setRestoring(false);
+    });
     return () => {
       cancelled = true;
     };

@@ -42,14 +42,46 @@ export interface OrderItem {
   unitPrice: number;
   notes: string;
   subtotal: number;
+  /**
+   * SNAPSHOT: apakah barang ini objek PBJT SAAT transaksi terjadi. Rokok tidak.
+   * Memindahkan produk ke kategori lain kelak tidak boleh mengubah pajak order
+   * yang sudah lewat — struknya sudah tercetak dan refund dihitung dari sini.
+   */
+  taxable: boolean;
 }
+
+export type TaxStatus = "taxable" | "exempt";
 
 export interface Order {
   id: string;
   tableCode: string;
   tableSeq: number;
   status: OrderStatus;
+  /** Jumlah subtotal item, sebelum pajak. */
+  subtotal: number;
+  /**
+   * Bagian dari `subtotal` yang objek PBJT — basis perhitungan pajaknya.
+   *
+   * Sama dengan `subtotal` pada order tanpa rokok, dan 0 pada order yang isinya
+   * rokok saja. Perhatikan: order rokok-saja tetap `taxStatus: "taxable"` dengan
+   * pajak 0. Itu BUKAN pembebasan — pembebasan adalah keputusan orang yang
+   * wajib berketerangan dan tercatat penyetujunya; ini sekadar barang yang
+   * memang di luar objek pajak.
+   */
+  taxableSubtotal: number;
+  /**
+   * Uang yang ditagih ke pelanggan: subtotal + pajak.
+   *
+   * Selama order masih `pending` status pajaknya belum diputuskan, jadi nilai
+   * ini masih sama dengan `subtotal`. Keduanya baru berpisah saat pelunasan.
+   */
   total: number;
+  taxStatus: TaxStatus;
+  /** Tarif saat transaksi, dalam basis point. Di-snapshot juga saat bebas pajak. */
+  taxRateBps: number;
+  taxAmount: number;
+  taxExemptReason: string | null;
+  taxApprovedByName: string | null;
   version: number;
   items: OrderItem[];
   createdAt: string;
@@ -72,6 +104,21 @@ export interface DraftItem {
   quantity: number;
   unitPrice: number;
   notes: string;
+}
+
+/**
+ * Identitas satu baris keranjang.
+ *
+ * Bukan productId saja. Sejak Indomie Kuah punya pilihan jenis kuah yang tidak
+ * mengubah harga, dua baris bisa menunjuk produk yang sama dan hanya berbeda di
+ * `notes` — dan keduanya harus tetap bisa dinaikkan, diturunkan, dan dihapus
+ * sendiri-sendiri. Dengan productId saja, menekan "−" pada yang Soto juga
+ * menurunkan yang Ayam Spesial, dan React melihat dua anak berkunci sama.
+ *
+ * Kembarannya ada di mobile/lib/types.ts.
+ */
+export function draftLineKey(item: DraftItem): string {
+  return `${item.productId} ${item.notes}`;
 }
 
 /** Payload item yang dikirim ke RPC create_order / append_to_order. */

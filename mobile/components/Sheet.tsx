@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { useLayoutMode } from "../lib/use-layout-mode";
 import {
@@ -45,9 +48,6 @@ export default function Sheet({
 }: SheetProps) {
   const phone = useLayoutMode() === "phone";
   const top = phone && anchor === "top";
-  // statusBarTranslucent membuat modal ikut menutupi batang status, jadi
-  // lembar yang berlabuh di atas harus menyisakan tingginya sendiri.
-  const insets = useSafeAreaInsets();
 
   return (
     <Modal
@@ -57,8 +57,61 @@ export default function Sheet({
       // berlabuh di atas itu berarti terbang melintasi layar, jadi dipudarkan.
       animationType={phone && !top ? "slide" : "fade"}
       onRequestClose={onClose}
-      statusBarTranslucent>
-      <View
+      statusBarTranslucent
+      navigationBarTranslucent>
+      {/*
+        Modal Android adalah jendela tersendiri. SafeAreaProvider di App.tsx
+        mengukur jendela utama, dan di dalam sini nilainya nol — batang navigasi
+        menutupi baris terakhir lembar tanpa ada yang menyadarinya. Provider
+        kedua memaksa pengukuran ulang terhadap jendela milik modal ini.
+      */}
+      <SafeAreaProvider>
+        <SheetPanel
+          title={title}
+          subtitle={subtitle}
+          onClose={onClose}
+          footer={footer}
+          phone={phone}
+          top={top}>
+          {children}
+        </SheetPanel>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+interface SheetPanelProps {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  phone: boolean;
+  top: boolean;
+}
+
+/**
+ * Isi lembar, dipisah supaya `useSafeAreaInsets` terbaca di bawah
+ * SafeAreaProvider milik modal — bukan milik layar di belakangnya.
+ */
+function SheetPanel({
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  phone,
+  top,
+}: SheetPanelProps) {
+  const insets = useSafeAreaInsets();
+  // Lembar yang berlabuh di bawah berakhir di tepi layar, dan batang navigasi
+  // duduk di atasnya — tombol terakhir tertutup separuh. Ruangnya disisakan di
+  // dalam panel, bukan di backdrop, supaya warna lembar tetap mengisi sampai
+  // tepi dan tidak muncul pita gelap di bawah tombol.
+  const bottomInset = phone && !top ? insets.bottom : 0;
+
+  return (
+    <View
         style={[
           styles.backdrop,
           phone && styles.backdropPhone,
@@ -70,6 +123,7 @@ export default function Sheet({
             styles.panel,
             phone ? styles.panelPhone : styles.panelWide,
             top && styles.panelTop,
+            !footer && bottomInset > 0 ? { paddingBottom: bottomInset } : null,
           ]}>
           <View style={styles.header}>
             <View style={styles.headerText}>
@@ -89,10 +143,19 @@ export default function Sheet({
 
           <View style={styles.body}>{children}</View>
 
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
+          {footer ? (
+            <View
+              style={[
+                styles.footer,
+                bottomInset > 0
+                  ? { paddingBottom: spacing.lg + bottomInset }
+                  : null,
+              ]}>
+              {footer}
+            </View>
+          ) : null}
         </View>
-      </View>
-    </Modal>
+    </View>
   );
 }
 

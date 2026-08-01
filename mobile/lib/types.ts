@@ -9,6 +9,9 @@ export type OrderStatus = "pending" | "paid" | "void";
 
 export type PaymentMethod = "cash" | "non_cash";
 
+/** Status PBJT satu order. Cerminan enum `tax_status` di Postgres. */
+export type TaxStatus = "taxable" | "exempt";
+
 export interface Employee {
   id: string;
   name: string;
@@ -37,6 +40,19 @@ export interface DraftItem {
   quantity: number;
   unitPrice: number;
   notes: string;
+}
+
+/**
+ * Identitas satu baris keranjang.
+ *
+ * Bukan productId saja. Sejak Indomie Kuah punya pilihan jenis kuah yang tidak
+ * mengubah harga, dua baris bisa menunjuk produk yang sama dan hanya berbeda di
+ * `notes` — dan keduanya harus tetap bisa dinaikkan, diturunkan, dan dihapus
+ * sendiri-sendiri. Dengan productId saja, menekan "−" pada yang Soto juga
+ * menurunkan yang Ayam Spesial, dan React melihat dua anak berkunci sama.
+ */
+export function draftLineKey(item: DraftItem): string {
+  return `${item.productId} ${item.notes}`;
 }
 
 export function tableLabel(tableCode: string, tableSeq: number): string {

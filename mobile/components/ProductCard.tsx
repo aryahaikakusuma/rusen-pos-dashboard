@@ -12,6 +12,20 @@ import {
   textStyles,
 } from "../theme";
 
+// Penanda ikut poros variannya. Menuliskan "Panas/Dingin" secara harfiah
+// membuat kartu nasi paket dan kartu Indomie berbohong tentang isinya.
+const VARIANT_TAG: Record<string, string> = {
+  saus: "6 Saus",
+  topping: "Topping",
+  suhu: "Panas/Dingin",
+};
+
+const VARIANT_SPOKEN: Record<string, string> = {
+  saus: "tersedia enam pilihan saus",
+  topping: "tersedia pilihan topping",
+  suhu: "tersedia panas dan dingin",
+};
+
 interface ProductCardProps {
   entry: ProductEntry;
   disabled?: boolean;
@@ -34,6 +48,9 @@ interface ProductCardProps {
  */
 function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
   const hasVariants = entry.options.length > 1;
+  const variantTag = VARIANT_TAG[entry.kind ?? ""] ?? "Varian";
+  const variantSpoken =
+    VARIANT_SPOKEN[entry.kind ?? ""] ?? "tersedia beberapa varian";
   const price =
     entry.minPrice === entry.maxPrice
       ? formatRupiah(entry.minPrice)
@@ -45,7 +62,7 @@ function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
       accessibilityRole="button"
       accessibilityLabel={
         hasVariants
-          ? `${entry.label}, mulai ${formatRupiah(entry.minPrice)}, tersedia panas dan dingin`
+          ? `${entry.label}, mulai ${formatRupiah(entry.minPrice)}, ${variantSpoken}`
           : `${entry.label}, ${formatRupiah(entry.minPrice)}`
       }
       onPress={onPress}
@@ -67,7 +84,7 @@ function ProductCardBase({ entry, disabled, onPress }: ProductCardProps) {
             terlihat tidak rata. */}
         {hasVariants ? (
           <View style={styles.variantTag}>
-            <Text style={styles.variantTagLabel}>Panas/Dingin</Text>
+            <Text style={styles.variantTagLabel}>{variantTag}</Text>
           </View>
         ) : (
           <View style={styles.variantTagSpacer} />

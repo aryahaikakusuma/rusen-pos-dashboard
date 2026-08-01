@@ -33,6 +33,7 @@
     "build:dev": "eas build --profile development --platform android",
     "build:preview": "eas build --profile preview --platform android",
     "build:prod": "eas build --profile production --platform android",
+    "periksa:varian": "tsc scripts/periksa-varian.ts lib/product-variants.ts --ignoreConfig --outDir node_modules/.cache/periksa-varian --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node node_modules/.cache/periksa-varian/scripts/periksa-varian.js",
     "preview:struk": "tsc scripts/preview-receipt.ts --ignoreConfig --types node --outDir node_modules/.cache/preview-struk --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node node_modules/.cache/preview-struk/scripts/preview-receipt.js"
   },
   "private": true

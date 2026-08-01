@@ -31,8 +31,12 @@
 
 begin;
 
-insert into outlets (id, name, address) values
-  ('00000000-0000-0000-0000-000000000001', 'Rusen Kopitiam', 'Outlet Utama');
+-- tax_rate_bps ditulis eksplisit walau nilainya sama dengan default kolomnya
+-- (0012). Tarif pajak adalah angka yang orang cari dan ubah; membiarkannya
+-- hanya hidup sebagai default di migrasi berarti ia tidak terlihat sama sekali
+-- dari berkas yang dibaca saat memasang instalasi baru.
+insert into outlets (id, name, address, tax_rate_bps) values
+  ('00000000-0000-0000-0000-000000000001', 'Rusen Kopitiam', 'Outlet Utama', 1000);  -- PBJT 10%
 
 insert into employees (outlet_id, name, pin_hash, role) values
   ('00000000-0000-0000-0000-000000000001', 'Pagi',  '$2b$10$mqWL5jMOE5X8Jg8DPLTWaOkMPMbKsK73Pv24JnQpsKrvm3qBe/Uae', 'cashier'),
@@ -63,6 +67,12 @@ insert into categories (outlet_id, code, name, sort_order) values
   ('00000000-0000-0000-0000-000000000001', 'ADDON'  , 'Add On'                        , 21),
   ('00000000-0000-0000-0000-000000000001', 'TOPPING', 'Topping'                       , 22),
   ('00000000-0000-0000-0000-000000000001', 'ROKOK'  , 'Rokok'                         , 23);
+
+-- Rokok bukan objek PBJT (0019). Ditulis sebagai UPDATE terpisah, bukan sebagai
+-- kolom di INSERT di atas, karena hanya satu dari 23 baris yang berbeda dan
+-- menambahkan kolom ke setiap baris menyembunyikan satu-satunya yang penting.
+-- Bentuknya sama persis dengan yang ada di migrasinya.
+update categories set taxable = false where code = 'ROKOK';
 
 insert into products (outlet_id, category_id, code, name, price)
 select '00000000-0000-0000-0000-000000000001', c.id, v.code, v.name, v.price
@@ -264,23 +274,43 @@ from (values
 
   -- Nasi Paket
   ('NASPKT' , 'K147'   , 'Nasi Paket Ayam Goreng'                    , 30000),
+  -- Varian saus. Baris tanpa akhiran saus (K148, NP2) adalah varian Ori dan
+  -- tetap Rp 25.000; kelima sausnya Rp 27.000, selisih tetap Rp 2.000. Nama
+  -- dasarnya harus persis sama dengan baris Ori, karena penggabungan kartu di
+  -- lib/product-variants.ts memotong akhiran saus lalu mencocokkan sisanya.
   ('NASPKT' , 'K148'   , 'Nasi Paket Ayam Goreng Tepung'             , 25000),
+  ('NASPKT' , 'K148A'  , 'Nasi Paket Ayam Goreng Tepung Mayonnaise'  , 27000),
+  ('NASPKT' , 'K148B'  , 'Nasi Paket Ayam Goreng Tepung Bangkok'     , 27000),
+  ('NASPKT' , 'K148C'  , 'Nasi Paket Ayam Goreng Tepung Mentega'     , 27000),
+  ('NASPKT' , 'K148D'  , 'Nasi Paket Ayam Goreng Tepung Lada Hitam'  , 27000),
+  ('NASPKT' , 'K148E'  , 'Nasi Paket Ayam Goreng Tepung Teriyaki'    , 27000),
   ('NASPKT' , 'NP003'  , 'Nasi Paket Cumi Goreng Tepung'             , 25000),
   ('NASPKT' , 'K145'   , 'Nasi Paket Telur Kecap'                    , 15000),
   ('NASPKT' , 'K146'   , 'Nasi Paket Telur Kecap Pedas'              , 18000),
   ('NASPKT' , 'NP2'    , 'Nasi Paket Udang Goreng Tepung'            , 25000),
+  ('NASPKT' , 'NP2A'   , 'Nasi Paket Udang Goreng Tepung Mayonnaise' , 27000),
+  ('NASPKT' , 'NP2B'   , 'Nasi Paket Udang Goreng Tepung Bangkok'    , 27000),
+  ('NASPKT' , 'NP2C'   , 'Nasi Paket Udang Goreng Tepung Mentega'    , 27000),
+  ('NASPKT' , 'NP2D'   , 'Nasi Paket Udang Goreng Tepung Lada Hitam' , 27000),
+  ('NASPKT' , 'NP2E'   , 'Nasi Paket Udang Goreng Tepung Teriyaki'   , 27000),
 
   -- Indomie
   ('INDOMIE', 'K134'   , 'Indomie Goreng Polos'                      , 10000),
   ('INDOMIE', 'K135'   , 'Indomie Goreng Sayur'                      , 12000),
   ('INDOMIE', 'K136'   , 'Indomie Goreng Sayur + Telur'              , 17000),
   ('INDOMIE', 'K137'   , 'Indomie Goreng Sayur + Telur + Sosis'      , 20000),
-  ('INDOMIE', '138'    , 'indomie goreng+telur'                      , 15000),
+  ('INDOMIE', '138'    , 'Indomie Goreng Telur'                      , 15000),
+  ('INDOMIE', 'K134A'   , 'Indomie Goreng Sosis'                      , 13000),
+  ('INDOMIE', 'K134B'   , 'Indomie Goreng Sayur + Sosis'              , 15000),
+  ('INDOMIE', 'K134C'   , 'Indomie Goreng Telur + Sosis'              , 18000),
   ('INDOMIE', 'K130'   , 'Indomie Kuah Polos'                        ,  8000),
   ('INDOMIE', 'K131'   , 'Indomie Kuah Sayur'                        , 10000),
   ('INDOMIE', 'K132'   , 'Indomie Kuah Sayur + Telur'                , 15000),
   ('INDOMIE', 'K133'   , 'Indomie Kuah Sayur + Telur + Sosis'        , 18000),
-  ('INDOMIE', '139'    , 'indomie kuah+telur'                        , 13000),
+  ('INDOMIE', '139'    , 'Indomie Kuah Telur'                        , 13000),
+  ('INDOMIE', 'K130A'   , 'Indomie Kuah Sosis'                        , 11000),
+  ('INDOMIE', 'K130B'   , 'Indomie Kuah Sayur + Sosis'                , 13000),
+  ('INDOMIE', 'K130C'   , 'Indomie Kuah Telur + Sosis'                , 16000),
   ('INDOMIE', 'R005'   , 'Tambah Indomie Sebungkus'                  ,  5000),
 
   -- Dimsum
