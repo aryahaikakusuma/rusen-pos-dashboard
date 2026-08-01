@@ -9,10 +9,12 @@ import * as Updates from "expo-updates";
 
 import Button from "../components/Button";
 import KasSheet from "../components/KasSheet";
-import ModalAwalGate from "../components/ModalAwalGate";
+import ModalAwalSheet from "../components/ModalAwalSheet";
+import ModeUjiSheet from "../components/ModeUjiSheet";
 import PrinterSheet from "../components/PrinterSheet";
 import Sheet from "../components/Sheet";
 import ToastProvider, { useToast } from "../components/Toast";
+import TutupKasirConfirm from "../components/TutupKasirConfirm";
 import TutupKasirSheet from "../components/TutupKasirSheet";
 import {
   cashTotals,
@@ -23,20 +25,15 @@ import {
   type CashTotals,
 } from "../db/cash";
 import { pushPending } from "../db/push";
-import {
-  closeShift,
-  currentShift,
-  openShift,
-  shiftTotals,
-  type OpenShift,
-  type ShiftTotals,
-} from "../db/shift";
+import { closeShift, shiftTotals, type ShiftTotals } from "../db/shift";
 import { useAuth } from "../lib/auth-context";
 import { printShiftReport, translatePrinterError } from "../lib/printer";
 import { kasSeharusnya, type ShiftReport } from "../lib/receipt";
+import { ShiftProvider, useGateShift, useShift } from "../lib/shift-context";
 import { useShortViewport } from "../lib/use-layout-mode";
 import {
   colors,
+  radius,
   semantic,
   spacing,
   textStyles,
@@ -46,6 +43,7 @@ import CashierScreen from "./CashierScreen";
 import DebugScreen from "./DebugScreen";
 import EditOrderScreen from "./EditOrderScreen";
 import OrdersScreen from "./OrdersScreen";
+import PengaturanScreen from "./PengaturanScreen";
 
 type Tab = "cashier" | "orders";
 
@@ -57,7 +55,11 @@ type Tab = "cashier" | "orders";
 export default function AppShell() {
   return (
     <ToastProvider>
-      <Shell />
+      {/* ShiftProvider di dalam ToastProvider: useGateShift menolak aksi lewat
+          toast, jadi ia harus bisa membacanya. */}
+      <ShiftProvider>
+        <Shell />
+      </ShiftProvider>
     </ToastProvider>
   );
 }
@@ -66,19 +68,28 @@ function Shell() {
   const db = useSQLiteContext();
   const { session, logout } = useAuth();
   const toast = useToast();
+  const { shift, aktif, membuka, mulai, tandaiTutup } = useShift();
+  const gateShift = useGateShift();
   const [tab, setTab] = useState<Tab>("cashier");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [debug, setDebug] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pengaturanOpen, setPengaturanOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
+  // Mode uji. Dimiliki di sini, bukan di CashierScreen: penandanya harus tetap
+  // terlihat saat kasir menengok tab Order, dan mematikannya adalah keputusan
+  // yang menyangkut kedua layar. `null` = mati.
+  const [modeUji, setModeUji] = useState<{ reason: string } | null>(null);
+  const [modeUjiOpen, setModeUjiOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [pembaruan, setPembaruan] = useState<string | null>(null);
   const [memeriksaPembaruan, setMemeriksaPembaruan] = useState(false);
 
-  // Sif kasir. `undefined` = belum dimuat dari SQLite, `null` = tidak ada sif
-  // terbuka (gerbang Modal Awal harus tampil), objek = sif sedang berjalan.
-  const [shift, setShift] = useState<OpenShift | null | undefined>(undefined);
-  const [openingShift, setOpeningShift] = useState(false);
+  // Sif kasir dimiliki ShiftProvider (lib/shift-context.tsx) — layar lain juga
+  // membacanya untuk mematikan aksi tulisnya, dan dua salinan state akan
+  // menyimpang. Yang tinggal di sini hanya lembar-lembarnya.
+  const [modalAwalOpen, setModalAwalOpen] = useState(false);
+  const [tutupKasirConfirm, setTutupKasirConfirm] = useState(false);
   const [tutupKasirOpen, setTutupKasirOpen] = useState(false);
   const [tutupKasirTotals, setTutupKasirTotals] = useState<ShiftTotals | null>(null);
   // Rincian kas untuk kertas, diambil pada MOMEN YANG SAMA dengan
@@ -110,35 +121,15 @@ function Shell() {
     setRefreshToken((n) => n + 1);
   }, []);
 
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    currentShift(db).then((found) => {
-      if (!cancelled) setShift(found);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [db, session]);
-
   const handleOpenShift = async (modalAwal: number) => {
-    if (!session) return;
-    setOpeningShift(true);
-    try {
-      await openShift(db, {
-        employeeId: session.employeeId,
-        employeeName: session.name,
-        modalAwal,
-      });
-      setShift(await currentShift(db));
-    } finally {
-      setOpeningShift(false);
-    }
+    await mulai(modalAwal);
+    setModalAwalOpen(false);
+    toast.success("Sif dimulai. Semua fitur aktif.");
   };
 
   const openTutupKasir = async () => {
     if (!shift) return;
-    setMenuOpen(false);
+    setTutupKasirConfirm(false);
     const [totals, gerakan] = await Promise.all([
       shiftTotals(db, shift),
       shiftCashMovements(db, shift.id),
@@ -148,8 +139,6 @@ function Shell() {
     setTutupKasirOpen(true);
   };
 
-  // Menu hanya bisa dibuka sesudah gerbang ModalAwalGate dilewati, jadi
-  // `shift` pasti ada di sini — tidak perlu penjagaan "belum ada sif".
   const muatKas = async (shiftId: string) => {
     const [entries, totals] = await Promise.all([
       shiftCashMovements(db, shiftId),
@@ -189,10 +178,22 @@ function Shell() {
     }
   };
 
+  // Boleh dibuka tanpa sif, tapi hanya untuk dibaca. Entri kas selalu milik
+  // satu sif (`cash_movements.shift_id`), jadi tanpa sif memang tidak ada apa
+  // pun untuk ditampilkan — nolnya yang jujur, bukan angka sif lama.
   const openKas = async () => {
-    if (!shift) return;
     setMenuOpen(false);
-    await muatKas(shift.id);
+    if (shift) {
+      await muatKas(shift.id);
+    } else {
+      setKasEntries([]);
+      setKasTotals({
+        masukTunai: 0,
+        masukNonTunai: 0,
+        keluarTunai: 0,
+        keluarNonTunai: 0,
+      });
+    }
     setKasOpen(true);
   };
 
@@ -202,6 +203,7 @@ function Shell() {
     amount: number;
     note: string;
   }): Promise<boolean> => {
+    if (!gateShift("mencatat kas")) return false;
     if (!shift || !session) return false;
     setSavingKas(true);
     try {
@@ -224,6 +226,7 @@ function Shell() {
   };
 
   const batalkanKas = async (id: string) => {
+    if (!gateShift("membatalkan entri kas")) return;
     if (!shift) return;
     setSavingKas(true);
     try {
@@ -287,7 +290,8 @@ function Shell() {
       // yang baru saja ditutup tidak boleh terbawa.
       setKasEntries([]);
       setKasTotals(null);
-      setShift(null); // gerbang Modal Awal tampil lagi untuk sif berikutnya
+      // Kembali ke mode read-only sampai sif berikutnya dimulai.
+      tandaiTutup();
       toast.success("Laporan Tutup Kasir tercetak.");
     } catch (caught) {
       toast.error(translatePrinterError(caught));
@@ -306,22 +310,10 @@ function Shell() {
       .catch(() => {});
   }, [db, session, bumpOrders]);
 
-  // Gerbang wajib: tidak ada apa pun yang bisa dilayani sebelum Modal Awal
-  // diisi. Muncul sesudah login pertama, dan lagi sesudah Tutup Kasir
-  // berhasil dicetak (shift di-reset ke null di printTutupKasir). `undefined`
-  // (belum selesai dibaca dari SQLite) sengaja tidak menampilkan apa pun,
-  // supaya gerbang tidak berkedip sekilas untuk kasir yang sifnya sudah ada.
-  if (session && shift === null) {
-    return (
-      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-        <ModalAwalGate
-          cashierName={session.name}
-          saving={openingShift}
-          onOpen={handleOpenShift}
-        />
-      </SafeAreaView>
-    );
-  }
+  // Tidak ada lagi gerbang penuh layar sebelum Modal Awal diisi. Melihat
+  // katalog dan riwayat order tidak memindahkan uang, jadi ia tidak butuh sif;
+  // yang ditahan hanya aksi tulis, lewat useGateShift di tiap layar, dan
+  // ShiftBanner yang menjelaskan kenapa.
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -335,6 +327,11 @@ function Shell() {
         <CashierScreen
           refreshToken={refreshToken}
           onOpenMenu={() => setMenuOpen(true)}
+          testMode={modeUji}
+          onTestOrderCreated={() => {
+            setModeUji(null);
+            toast.success("Mode uji dimatikan. Order berikutnya dihitung normal.");
+          }}
           onSaved={() => {
             bumpOrders();
             setTab("orders");
@@ -377,54 +374,60 @@ function Shell() {
           subtitle={session?.role}
           onClose={() => setMenuOpen(false)}>
           <View style={styles.menu}>
-            <Button
-              // Layar yang sama, isi berbeda menurut peran: owner dapat alat
-              // uji, peran lain hanya penarikan katalog. Labelnya ikut
-              // menyesuaikan — tombol "Uji" yang membuka layar berjudul
-              // "Katalog" membingungkan.
-              label={isOwner ? "Uji" : "Katalog"}
-              onPress={() => {
-                setMenuOpen(false);
-                setDebug(true);
-              }}
-            />
-            {/* Versinya ditampilkan tanpa ditekan apa pun. Yang mau dijawab
-                adalah "ponsel ini menerima rilis atau tidak", dan jawaban yang
-                harus dicari dulu tidak akan pernah dibaca oleh orang yang
-                sedang jaga. Saluran selain `production` berarti APK-nya
-                dibangun dengan profil yang salah: ia tidak error, ia hanya
-                diam di versi lama selamanya. */}
-            <Button
-              label="Periksa Pembaruan"
-              disabled={memeriksaPembaruan}
-              onPress={() => void periksaPembaruan()}
-            />
-            <Text style={styles.versiBaris}>
-              Saluran: {Updates.channel ?? "—"} · runtime{" "}
-              {Updates.runtimeVersion ?? "—"}
-            </Text>
-            <Text style={styles.versiBaris}>{describeBundle()}</Text>
-            {pembaruan ? (
-              <Text style={styles.versiBaris}>{pembaruan}</Text>
-            ) : null}
-
-            {/* Dipilih sekali lalu tersimpan, jadi tempatnya memang di menu
-                yang jarang dibuka — bukan di layar kasir. */}
-            <Button
-              label="Printer"
-              onPress={() => {
-                setMenuOpen(false);
-                setPrinterOpen(true);
-              }}
-            />
             {/* Tidak dibatasi isOwner: yang membeli gas dan es batu dengan
                 uang laci adalah kasir yang sedang jaga, dan mencatatnya
                 harus semudah membelinya. */}
             <Button
-              label="Kas Masuk / Keluar"
+              label="Kas Masuk Keluar"
               onPress={() => void openKas()}
             />
-            <Button label="Tutup Kasir" onPress={() => void openTutupKasir()} />
+
+            {/* Gear di KIRI tombol sif, dengan jarak yang cukup: keduanya
+                berdampingan, tapi satu membuka layar yang jarang disentuh dan
+                satu lagi menutup kasir. Ketukan yang meleset di antara mereka
+                mahal, jadi jaraknya spacing.lg, bukan spacing.sm seperti
+                tombol menu lain. */}
+            <View style={styles.shiftRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Pengaturan"
+                onPress={() => {
+                  setMenuOpen(false);
+                  setPengaturanOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.gear,
+                  pressed && styles.gearPressed,
+                ]}>
+                <Text style={styles.gearGlyph}>⚙</Text>
+              </Pressable>
+
+              {/* Satu tombol yang berganti peran, bukan dua tombol yang salah
+                  satunya selalu tidak berlaku. Keadaan sif hanya punya dua
+                  wajah, dan tombol mati yang menetap di menu justru akan
+                  ditekan. */}
+              {aktif ? (
+                <Button
+                  label="Tutup Kasir"
+                  style={styles.shiftButton}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    setTutupKasirConfirm(true);
+                  }}
+                />
+              ) : (
+                <Button
+                  label="Mulai Shift"
+                  variant="primary"
+                  style={styles.shiftButton}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    setModalAwalOpen(true);
+                  }}
+                />
+              )}
+            </View>
+
             <Button
               label="Keluar"
               variant="danger"
@@ -439,11 +442,40 @@ function Shell() {
 
       {printerOpen ? <PrinterSheet onClose={() => setPrinterOpen(false)} /> : null}
 
-      {kasOpen && shift && kasTotals ? (
+      {modalAwalOpen && session ? (
+        <ModalAwalSheet
+          cashierName={session.name}
+          saving={membuka}
+          onOpen={(modalAwal) => void handleOpenShift(modalAwal)}
+          onCancel={() => setModalAwalOpen(false)}
+        />
+      ) : null}
+
+      {tutupKasirConfirm && shift ? (
+        <TutupKasirConfirm
+          shift={shift}
+          onConfirm={() => void openTutupKasir()}
+          onCancel={() => setTutupKasirConfirm(false)}
+        />
+      ) : null}
+
+      {modeUjiOpen ? (
+        <ModeUjiSheet
+          onCancel={() => setModeUjiOpen(false)}
+          onConfirm={(reason) => {
+            setModeUji({ reason });
+            setModeUjiOpen(false);
+            setTab("cashier");
+          }}
+        />
+      ) : null}
+
+      {kasOpen && kasTotals ? (
         <KasSheet
           entries={kasEntries}
           totals={kasTotals}
           saving={savingKas}
+          readOnly={!aktif}
           onClose={() => setKasOpen(false)}
           onSimpan={simpanKas}
           onBatalkan={(id) => void batalkanKas(id)}
@@ -482,6 +514,47 @@ function Shell() {
               setEditingId(null);
               bumpOrders();
             }}
+          />
+        </View>
+      ) : null}
+
+      {pengaturanOpen ? (
+        <View
+          style={[
+            styles.overlay,
+            {
+              paddingTop: insets.top + (short ? 0 : spacing.lg),
+              paddingBottom: insets.bottom,
+            },
+          ]}>
+          <PengaturanScreen
+            isOwner={isOwner}
+            modeUjiMenyala={modeUji !== null}
+            saluran={`${Updates.channel ?? "—"} · runtime ${
+              Updates.runtimeVersion ?? "—"
+            }`}
+            bundel={describeBundle()}
+            pembaruan={pembaruan}
+            memeriksaPembaruan={memeriksaPembaruan}
+            onKatalog={() => {
+              setPengaturanOpen(false);
+              setDebug(true);
+            }}
+            onModeUji={() => {
+              setPengaturanOpen(false);
+              setModeUjiOpen(true);
+            }}
+            onMatikanModeUji={() => {
+              setPengaturanOpen(false);
+              setModeUji(null);
+              toast.success("Mode uji dimatikan.");
+            }}
+            onPeriksaPembaruan={() => void periksaPembaruan()}
+            onPrinter={() => {
+              setPengaturanOpen(false);
+              setPrinterOpen(true);
+            }}
+            onClose={() => setPengaturanOpen(false)}
           />
         </View>
       ) : null}
@@ -560,7 +633,31 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.lg,
   },
-  versiBaris: { ...textStyles.caption, color: semantic.textSecondary },
+  shiftRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+  gear: {
+    width: touchTarget.primaryAction,
+    height: touchTarget.primaryAction,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: semantic.border,
+    borderRadius: radius.md,
+    backgroundColor: semantic.surface,
+  },
+  gearPressed: {
+    backgroundColor: semantic.surfaceMuted,
+  },
+  gearGlyph: {
+    ...textStyles.actionButton,
+    color: semantic.textPrimary,
+  },
+  shiftButton: {
+    flex: 1,
+  },
   content: {
     flex: 1,
   },

@@ -5,6 +5,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import Button from "../components/Button";
 import ProductGrid from "../components/ProductGrid";
 import Sheet from "../components/Sheet";
+import ShiftBanner from "../components/ShiftBanner";
 import StatusBadge from "../components/StatusBadge";
 import { useToast } from "../components/Toast";
 import VariantSheet from "../components/VariantSheet";
@@ -20,6 +21,7 @@ import {
 import type { OrderItemRow, OrderRow, ProductRow } from "../db/types";
 import { useAuth } from "../lib/auth-context";
 import type { ProductEntry } from "../lib/product-variants";
+import { useGateShift, useShift } from "../lib/shift-context";
 import { formatRupiah, tableLabel } from "../lib/types";
 import {
   colors,
@@ -51,6 +53,8 @@ export default function EditOrderScreen({
   const db = useSQLiteContext();
   const toast = useToast();
   const { session } = useAuth();
+  const { aktif: shiftAktif } = useShift();
+  const gateShift = useGateShift();
 
   const [order, setOrder] = useState<(OrderRow & { items: OrderItemRow[] }) | null>(
     null
@@ -109,6 +113,7 @@ export default function EditOrderScreen({
 
   const handleAdd = useCallback(
     (productId: string, notes = "") => {
+      if (!gateShift("menambah item")) return;
       if (!order || busyRef.current) return;
       busyRef.current = true;
       void run("Item ditambahkan", () =>
@@ -121,7 +126,7 @@ export default function EditOrderScreen({
         busyRef.current = false;
       });
     },
-    [order, db, orderId, run]
+    [order, db, orderId, run, gateShift]
   );
 
   // Sheet "tambah item" harus ditutup dulu sebelum VariantSheet dibuka: RN
@@ -142,6 +147,7 @@ export default function EditOrderScreen({
   );
 
   const handleVoid = () => {
+    if (!gateShift("membatalkan item")) return;
     if (!order || !voiding || !session) return;
     const quantity = Number(voidQty);
     const item = voiding;
@@ -159,6 +165,7 @@ export default function EditOrderScreen({
   };
 
   const handleClearAll = () => {
+    if (!gateShift("membatalkan item")) return;
     if (!order || !session) return;
     setClearing(false);
     void run("Semua item dibatalkan", () =>
@@ -177,6 +184,7 @@ export default function EditOrderScreen({
   };
 
   const handleChangeTable = async () => {
+    if (!gateShift("memindah meja")) return;
     if (!order) return;
     setBusy(true);
     try {
@@ -228,10 +236,13 @@ export default function EditOrderScreen({
     );
   }
 
-  const editable = order.status === "pending";
+  // Sif ikut jadi syarat, bukan hanya status order: menambah atau membatalkan
+  // item mengubah angka yang dijendela laporan Tutup Kasir.
+  const editable = order.status === "pending" && shiftAktif;
 
   return (
     <View style={styles.screen}>
+      {!shiftAktif ? <ShiftBanner /> : null}
       <View style={styles.header}>
         <View style={styles.headerStatus}>
           <StatusBadge status={order.status} />
@@ -324,7 +335,9 @@ export default function EditOrderScreen({
           />
         ) : (
           <Text style={styles.locked}>
-            Order yang sudah lunas atau dibatalkan tidak bisa diubah.
+            {!shiftAktif && order.status === "pending"
+              ? "Mulai sif dulu sebelum mengubah order."
+              : "Order yang sudah lunas atau dibatalkan tidak bisa diubah."}
           </Text>
         )}
       </View>
