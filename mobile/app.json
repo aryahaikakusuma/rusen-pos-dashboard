@@ -5,6 +5,7 @@
     "owner": "heikarya",
     "version": "1.0.0",
     "orientation": "default",
+    "scheme": "rusenpos",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
@@ -35,7 +36,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-router"
     ],
     "extra": {
       "eas": {

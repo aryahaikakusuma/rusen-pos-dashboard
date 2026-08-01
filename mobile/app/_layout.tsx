@@ -3,18 +3,18 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { Slot } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { migrateDbIfNeeded } from './db/migrations';
-import { AuthProvider, useAuth } from './lib/auth-context';
-import AppShell from './screens/AppShell';
-import LoginScreen from './screens/LoginScreen';
-import { appFonts, colors } from './theme';
+import { migrateDbIfNeeded } from '../db/migrations';
+import { AuthProvider, useAuth } from '../lib/auth-context';
+import LoginScreen from '../screens/LoginScreen';
+import { appFonts, colors } from '../theme';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function App() {
+export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(appFonts);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function App() {
 
 /**
  * Masuk atau tidak masuk — dua keadaan, jadi percabangan biasa sudah cukup.
- * Perpindahan antar layar di dalam sesi ditangani AppShell.
+ * Perpindahan antar layar di dalam sesi ditangani oleh route di dalam app/.
  */
 function Root() {
   const { session, restoring } = useAuth();
@@ -60,7 +60,7 @@ function Root() {
   return (
     <>
       <StatusBar style={session ? 'dark' : 'light'} />
-      {session ? <AppShell /> : <LoginScreen />}
+      {session ? <Slot /> : <LoginScreen />}
     </>
   );
 }
