@@ -9,7 +9,6 @@ import { useSQLiteContext } from "expo-sqlite";
 import * as Updates from "expo-updates";
 
 import Button from "../components/Button";
-import KasSheet from "../components/KasSheet";
 import ModalAwalSheet from "../components/ModalAwalSheet";
 import ModeUjiSheet from "../components/ModeUjiSheet";
 import PrinterSheet from "../components/PrinterSheet";
@@ -17,14 +16,7 @@ import Sheet from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import TutupKasirConfirm from "../components/TutupKasirConfirm";
 import TutupKasirSheet from "../components/TutupKasirSheet";
-import {
-  cashTotals,
-  recordCashMovement,
-  shiftCashMovements,
-  voidCashMovement,
-  type CashMovement,
-  type CashTotals,
-} from "../db/cash";
+import { shiftCashMovements, type CashMovement } from "../db/cash";
 import { pushPending } from "../db/push";
 import { useCart } from "../lib/cart-context";
 import { closeShift, shiftTotals, type ShiftTotals } from "../db/shift";
@@ -64,12 +56,7 @@ export default function AppShell() {
   // Mode uji, katalog, dan penanda "order baru tersimpan" dimiliki CartProvider
   // (lib/cart-context.tsx) — halaman keranjang membacanya juga, dan dua salinan
   // akan menyimpang.
-  const {
-    testMode: modeUji,
-    setTestMode: setModeUji,
-    savedTick,
-    reloadProducts,
-  } = useCart();
+  const { testMode: modeUji, setTestMode: setModeUji, savedTick } = useCart();
   const [tab, setTab] = useState<Tab>("cashier");
   const [debug, setDebug] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -88,21 +75,12 @@ export default function AppShell() {
   const [tutupKasirOpen, setTutupKasirOpen] = useState(false);
   const [tutupKasirTotals, setTutupKasirTotals] = useState<ShiftTotals | null>(null);
   // Rincian kas untuk kertas, diambil pada MOMEN YANG SAMA dengan
-  // tutupKasirTotals di atas — bukan dibaca ulang saat mencetak, dan bukan
-  // diambil dari kasEntries (yang masih kosong kalau lembar Kas belum pernah
-  // dibuka sesi ini, sehingga kertas akan memuat total tanpa rinciannya).
-  // Rincian dan total yang berasal dari dua momen berbeda bisa mencetak baris
-  // yang tidak terhitung di totalnya, dan tidak ada yang akan menyadarinya.
+  // tutupKasirTotals di atas, bukan dibaca ulang saat mencetak. Rincian dan
+  // total yang berasal dari dua momen berbeda bisa mencetak baris yang tidak
+  // terhitung di totalnya, dan tidak ada yang akan menyadarinya.
   const [tutupKasirGerakan, setTutupKasirGerakan] = useState<CashMovement[]>([]);
   const [printingShift, setPrintingShift] = useState(false);
 
-  // Kas non-penjualan sif berjalan. Entri dan totalnya dimuat bersama dan
-  // dimuat ulang bersama, supaya daftar di layar tidak pernah menunjukkan
-  // entri yang belum ikut dihitung di totalnya.
-  const [kasOpen, setKasOpen] = useState(false);
-  const [kasEntries, setKasEntries] = useState<CashMovement[]>([]);
-  const [kasTotals, setKasTotals] = useState<CashTotals | null>(null);
-  const [savingKas, setSavingKas] = useState(false);
 
   // Lapisan penutup diposisikan absolut, dan posisi absolut di Yoga diukur
   // dari tepi induk — bukan dari dalam sisa aman yang sudah disisakan
@@ -144,15 +122,6 @@ export default function AppShell() {
     setTutupKasirOpen(true);
   };
 
-  const muatKas = async (shiftId: string) => {
-    const [entries, totals] = await Promise.all([
-      shiftCashMovements(db, shiftId),
-      cashTotals(db, shiftId),
-    ]);
-    setKasEntries(entries);
-    setKasTotals(totals);
-  };
-
   /**
    * Memaksa pengecekan pembaruan saat itu juga, tanpa menunggu siklus
    * tutup-buka. Tempatnya di menu, bukan di layar Katalog: pertanyaan yang
@@ -180,65 +149,6 @@ export default function AppShell() {
       setPembaruan(`Tidak bisa memeriksa: ${(error as Error).message}`);
     } finally {
       setMemeriksaPembaruan(false);
-    }
-  };
-
-  // Boleh dibuka tanpa sif, tapi hanya untuk dibaca. Entri kas selalu milik
-  // satu sif (`cash_movements.shift_id`), jadi tanpa sif memang tidak ada apa
-  // pun untuk ditampilkan — nolnya yang jujur, bukan angka sif lama.
-  const openKas = async () => {
-    setMenuOpen(false);
-    if (shift) {
-      await muatKas(shift.id);
-    } else {
-      setKasEntries([]);
-      setKasTotals({
-        masukTunai: 0,
-        masukNonTunai: 0,
-        keluarTunai: 0,
-        keluarNonTunai: 0,
-      });
-    }
-    setKasOpen(true);
-  };
-
-  const simpanKas = async (params: {
-    direction: CashMovement["direction"];
-    method: CashMovement["method"];
-    amount: number;
-    note: string;
-  }): Promise<boolean> => {
-    if (!gateShift("mencatat kas")) return false;
-    if (!shift || !session) return false;
-    setSavingKas(true);
-    try {
-      await recordCashMovement(db, {
-        shiftId: shift.id,
-        ...params,
-        employeeId: session.employeeId,
-        employeeName: session.name,
-      });
-      await muatKas(shift.id);
-      return true;
-    } catch (caught) {
-      // recordCashMovement melempar kalimat berbahasa Indonesia yang memang
-      // ditujukan ke kasir, jadi diteruskan apa adanya.
-      toast.error(caught instanceof Error ? caught.message : String(caught));
-      return false;
-    } finally {
-      setSavingKas(false);
-    }
-  };
-
-  const batalkanKas = async (id: string) => {
-    if (!gateShift("membatalkan entri kas")) return;
-    if (!shift) return;
-    setSavingKas(true);
-    try {
-      await voidCashMovement(db, id);
-      await muatKas(shift.id);
-    } finally {
-      setSavingKas(false);
     }
   };
 
@@ -291,10 +201,10 @@ export default function AppShell() {
       setTutupKasirOpen(false);
       setTutupKasirTotals(null);
       setTutupKasirGerakan([]);
-      // Kas sif berikutnya mulai dari nol; sisa state lembar Kas milik sif
-      // yang baru saja ditutup tidak boleh terbawa.
-      setKasEntries([]);
-      setKasTotals(null);
+      // Kas sif berikutnya mulai dari nol dengan sendirinya: halaman Kas
+      // memuat entri dan totalnya dari `shift` tiap kali dibuka, jadi tidak ada
+      // sisa milik sif yang baru saja ditutup untuk dibersihkan di sini.
+      //
       // Kembali ke mode read-only sampai sif berikutnya dimulai.
       tandaiTutup();
       toast.success("Laporan Tutup Kasir tercetak.");
@@ -375,7 +285,10 @@ export default function AppShell() {
                 harus semudah membelinya. */}
             <Button
               label="Kas Masuk Keluar"
-              onPress={() => void openKas()}
+              onPress={() => {
+                setMenuOpen(false);
+                router.push("/kas");
+              }}
             />
 
             {/* Gear di KIRI tombol sif, dengan jarak yang cukup: keduanya
@@ -463,18 +376,6 @@ export default function AppShell() {
             setModeUjiOpen(false);
             setTab("cashier");
           }}
-        />
-      ) : null}
-
-      {kasOpen && kasTotals ? (
-        <KasSheet
-          entries={kasEntries}
-          totals={kasTotals}
-          saving={savingKas}
-          readOnly={!aktif}
-          onClose={() => setKasOpen(false)}
-          onSimpan={simpanKas}
-          onBatalkan={(id) => void batalkanKas(id)}
         />
       ) : null}
 
