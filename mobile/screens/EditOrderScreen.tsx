@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 
 import Button from "../components/Button";
-import ProductGrid from "../components/ProductGrid";
 import Sheet from "../components/Sheet";
 import ShiftBanner from "../components/ShiftBanner";
 import StatusBadge from "../components/StatusBadge";
 import { useToast } from "../components/Toast";
-import VariantSheet from "../components/VariantSheet";
-import { listProducts } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import {
-  appendToOrder,
   changeTableCode,
   getOrder,
   voidAllOrderItems,
   voidOrderItem,
 } from "../db/orders";
-import type { OrderItemRow, OrderRow, ProductRow } from "../db/types";
+import type { OrderItemRow, OrderRow } from "../db/types";
 import { useAuth } from "../lib/auth-context";
-import type { ProductEntry } from "../lib/product-variants";
 import { useGateShift, useShift } from "../lib/shift-context";
 import { formatRupiah, tableLabel } from "../lib/types";
 import {
@@ -55,18 +51,15 @@ export default function EditOrderScreen({
   const { session } = useAuth();
   const { aktif: shiftAktif } = useShift();
   const gateShift = useGateShift();
+  const router = useRouter();
 
   const [order, setOrder] = useState<(OrderRow & { items: OrderItemRow[] }) | null>(
     null
   );
-  const [products, setProducts] = useState<ProductRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [search, setSearch] = useState("");
   const [voiding, setVoiding] = useState<OrderItemRow | null>(null);
   const [voidQty, setVoidQty] = useState("");
   const [voidReason, setVoidReason] = useState("");
-  const [variantEntry, setVariantEntry] = useState<ProductEntry | null>(null);
   const [changingTable, setChangingTable] = useState(false);
   const [newTableCode, setNewTableCode] = useState("");
   const [clearing, setClearing] = useState(false);
@@ -78,8 +71,16 @@ export default function EditOrderScreen({
 
   useEffect(() => {
     void reload();
-    void listProducts(db).then(setProducts);
-  }, [db, reload]);
+  }, [reload]);
+
+  // Halaman Tambah item menulis ke order yang sama lewat rute sebelah, dan
+  // layar ini tetap terpasang di bawahnya — jadi tanpa ini, kembali dari sana
+  // menunjukkan daftar item dan total yang basi.
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload])
+  );
 
   const run = useCallback(
     async (label: string, action: () => Promise<unknown>) => {
@@ -95,55 +96,6 @@ export default function EditOrderScreen({
       }
     },
     [toast, reload]
-  );
-
-  /**
-   * Menambah satu item TANPA menutup sheet-nya. Pesanan yang datang ke kasir
-   * hampir tidak pernah satu item, dan menutup lembar tiap kali berarti kasir
-   * membuka ulang, mengetik ulang pencariannya, lalu menggulir lagi — untuk
-   * tiap baris pesanan. Sheet baru tertutup kalau kasir menekan (x).
-   *
-   * `busyRef` ada karena `appendToOrder` memakai `expectedVersion`, dan version
-   * baru diketahui setelah `reload()`. Dengan sheet yang tetap terbuka, dua
-   * ketukan cepat bisa keduanya membawa version yang sama; yang kedua ditolak
-   * STALE_ORDER padahal kasir tidak melakukan kesalahan apa pun. State `busy`
-   * tidak cukup untuk itu — ia baru terbaca setelah render berikutnya.
-   */
-  const busyRef = useRef(false);
-
-  const handleAdd = useCallback(
-    (productId: string, notes = "") => {
-      if (!gateShift("menambah item")) return;
-      if (!order || busyRef.current) return;
-      busyRef.current = true;
-      void run("Item ditambahkan", () =>
-        appendToOrder(db, {
-          orderId,
-          items: [{ productId, quantity: 1, notes }],
-          expectedVersion: order.version,
-        })
-      ).finally(() => {
-        busyRef.current = false;
-      });
-    },
-    [order, db, orderId, run, gateShift]
-  );
-
-  // Sheet "tambah item" harus ditutup dulu sebelum VariantSheet dibuka: RN
-  // Modal tidak mendukung dua Modal tampil bersamaan (z-order dan tombol
-  // back jadi tidak terdefinisi di Android). Ia dibuka lagi setelah varian
-  // dipilih atau dibatalkan, supaya dari sudut pandang kasir lembarnya tidak
-  // pernah menutup sendiri. Jalur satu opsi tidak menutup apa-apa.
-  const selectEntry = useCallback(
-    (entry: ProductEntry) => {
-      if (entry.options.length === 1) {
-        handleAdd(entry.options[0].product.id);
-        return;
-      }
-      setAdding(false);
-      setVariantEntry(entry);
-    },
-    [handleAdd]
   );
 
   const handleVoid = () => {
@@ -207,25 +159,6 @@ export default function EditOrderScreen({
       setBusy(false);
     }
   };
-
-  const keyword = search.trim().toLowerCase();
-  // Seluruh katalog diserahkan apa adanya — identitasnya stabil, jadi
-  // ProductGrid tidak mengelompokkan ulang tiap render (mis. saat busy
-  // berganti).
-  //
-  // Dulu di sini ada `products.slice(0, 30)`, dan itu adalah bug yang tampil di
-  // layar: layar ini tidak punya pemilih kategori, jadi tanpa kata kunci ia
-  // memotong daftar produk MENTAH yang terurut menurut kode. Kode "138" dan
-  // "139" — Indomie Goreng Telur dan Indomie Kuah Telur — mengurut paling atas
-  // secara teks, sementara saudara toppingnya "K130".."K137" ada jauh di bawah
-  // dan tidak ikut terpotong. Keduanya lalu tinggal satu opsi, dan
-  // groupProductVariants dengan benar mengembalikannya jadi kartu biasa bernama
-  // lengkap tanpa lembar topping. Dua kartu pertama layar ini adalah dua mi
-  // telur yatim, dan tidak ada satu pun error yang menyertainya.
-  //
-  // Pembatasannya sekarang dihitung dalam KARTU, di ProductGrid, setelah
-  // pengelompokan — sehingga sebuah keluarga varian selalu ikut utuh.
-  const visibleProducts = products;
 
   if (!order) {
     return (
@@ -331,7 +264,12 @@ export default function EditOrderScreen({
             label="Tambah item"
             variant="primary"
             disabled={busy}
-            onPress={() => setAdding(true)}
+            onPress={() =>
+              router.push({
+                pathname: "/edit-order/add",
+                params: { orderId },
+              })
+            }
           />
         ) : (
           <Text style={styles.locked}>
@@ -341,42 +279,6 @@ export default function EditOrderScreen({
           </Text>
         )}
       </View>
-
-      {adding ? (
-        <Sheet
-          title="Tambah item"
-          // Lembarnya kini menutupi daftar item, jadi jumlah dan totalnya
-          // dibawa ke sini — tanpa itu kasir menambah beberapa item sambil
-          // buta terhadap apa yang sudah masuk.
-          subtitle={`${tableLabel(order.table_code, order.table_seq)} · ${order.items.length} item · ${formatRupiah(order.total)}`}
-          onClose={() => {
-            setAdding(false);
-            setSearch("");
-          }}>
-          <View style={styles.searchWrap}>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Cari nama atau kode produk"
-              placeholderTextColor={semantic.textSecondary}
-              style={styles.input}
-              autoFocus
-            />
-          </View>
-          <View style={styles.gridWrap}>
-            <ProductGrid
-              products={visibleProducts}
-              keyword={keyword}
-              // Tanpa kata kunci, layar ini hanya memajang segenggam kartu
-              // pertama supaya kasir mengetik alih-alih menggulir 247 kartu.
-              // Batasnya dihitung dalam kartu, bukan produk.
-              limit={keyword ? undefined : 30}
-              onSelect={selectEntry}
-              emptyHint="Tidak ada produk cocok"
-            />
-          </View>
-        </Sheet>
-      ) : null}
 
       {changingTable ? (
         <Sheet
@@ -469,21 +371,6 @@ export default function EditOrderScreen({
             </Text>
           </View>
         </Sheet>
-      ) : null}
-
-      {variantEntry ? (
-        <VariantSheet
-          entry={variantEntry}
-          onPick={(productId, notes) => {
-            setVariantEntry(null);
-            setAdding(true);
-            handleAdd(productId, notes);
-          }}
-          onCancel={() => {
-            setVariantEntry(null);
-            setAdding(true);
-          }}
-        />
       ) : null}
 
       {voiding ? (

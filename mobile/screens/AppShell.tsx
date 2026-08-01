@@ -4,6 +4,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import * as Updates from "expo-updates";
 
@@ -42,7 +43,6 @@ import {
 } from "../theme";
 import CashierScreen from "./CashierScreen";
 import DebugScreen from "./DebugScreen";
-import EditOrderScreen from "./EditOrderScreen";
 import OrdersScreen from "./OrdersScreen";
 import PengaturanScreen from "./PengaturanScreen";
 
@@ -60,6 +60,7 @@ export default function AppShell() {
   const toast = useToast();
   const { shift, aktif, membuka, mulai, tandaiTutup } = useShift();
   const gateShift = useGateShift();
+  const router = useRouter();
   // Mode uji, katalog, dan penanda "order baru tersimpan" dimiliki CartProvider
   // (lib/cart-context.tsx) — halaman keranjang membacanya juga, dan dua salinan
   // akan menyimpang.
@@ -70,7 +71,6 @@ export default function AppShell() {
     reloadProducts,
   } = useCart();
   const [tab, setTab] = useState<Tab>("cashier");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [debug, setDebug] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pengaturanOpen, setPengaturanOpen] = useState(false);
@@ -337,7 +337,7 @@ export default function AppShell() {
       <View style={[styles.content, tab !== "orders" && styles.hidden]}>
         <OrdersScreen
           refreshToken={refreshToken}
-          onEdit={setEditingId}
+          onEdit={(id) => router.push({ pathname: "/edit-order/[id]", params: { id } })}
           onOpenMenu={() => setMenuOpen(true)}
         />
       </View>
@@ -491,29 +491,10 @@ export default function AppShell() {
         />
       ) : null}
 
-      {/* Layar uji dan layar ubah order menutupi, bukan menggantikan. Dulu
-          keduanya `return` lebih awal sehingga seluruh isi tab ikut
-          di-unmount: menekan "Ubah" pada satu order lalu kembali juga
-          mengosongkan keranjang yang sedang diisi. */}
-      {editingId ? (
-        <View
-          style={[
-            styles.overlay,
-            {
-              paddingTop: insets.top + (short ? 0 : spacing.lg),
-              paddingBottom: insets.bottom,
-            },
-          ]}>
-          <EditOrderScreen
-            orderId={editingId}
-            onClose={() => {
-              setEditingId(null);
-              bumpOrders();
-            }}
-          />
-        </View>
-      ) : null}
-
+      {/* Layar Katalog/Uji menutupi, bukan menggantikan. Dulu ia `return`
+          lebih awal sehingga seluruh isi tab ikut di-unmount, dan keranjang
+          yang sedang diisi ikut terbuang. Layar ubah order tidak lagi di sini —
+          ia rute app/edit-order/[id].tsx. */}
       {pengaturanOpen ? (
         <View
           style={[
