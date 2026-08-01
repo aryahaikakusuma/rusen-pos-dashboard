@@ -60,7 +60,8 @@ export default function Sheet({
       statusBarTranslucent
       navigationBarTranslucent>
       {/*
-        Modal Android adalah jendela tersendiri. SafeAreaProvider di App.tsx
+        Modal Android adalah jendela tersendiri. SafeAreaProvider di
+        app/_layout.tsx
         mengukur jendela utama, dan di dalam sini nilainya nol — batang navigasi
         menutupi baris terakhir lembar tanpa ada yang menyadarinya. Provider
         kedua memaksa pengukuran ulang terhadap jendela milik modal ini.

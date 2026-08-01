@@ -29,8 +29,10 @@ interface PengaturanScreenProps {
  * lain di atasnya membuat keduanya harus dicari tiap kali. Tidak ada yang
  * hilang di sini, hanya turun satu ketukan.
  *
- * Layar, bukan lembar: ia dibuka dari dalam lembar menu, dan RN Modal tidak
- * mendukung dua Modal tampil bersamaan di Android (lihat EditOrderScreen).
+ * Layar penuh, bukan lembar: ia dibuka dari dalam lembar menu, dan RN Modal
+ * tidak mendukung dua Modal tampil bersamaan di Android. Alasan itu masih
+ * berlaku — menu-nya sendiri masih sebuah Sheet — jadi layar ini tetap lapisan
+ * penutup milik AppShell dan tidak ikut jadi rute.
  */
 export default function PengaturanScreen({
   isOwner,
