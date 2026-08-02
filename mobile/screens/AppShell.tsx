@@ -41,6 +41,22 @@ import PengaturanScreen from "./PengaturanScreen";
 type Tab = "cashier" | "orders";
 
 /**
+ * Tab yang terakhir dipilih, disimpan di luar React.
+ *
+ * app/_layout.tsx merender `<Slot />`, bukan `<Stack />` — jadi rute sebelah
+ * (keranjang, pelunasan, kas, ubah order) TIDAK menumpuk di atas layar ini,
+ * melainkan menggantikannya, dan AppShell benar-benar di-unmount selama rute itu
+ * terbuka. Akibatnya `useState<Tab>("cashier")` dijalankan ulang tiap kali kasir
+ * kembali: ia menekan "Kembali" dari ubah order — yang hanya bisa dibuka dari
+ * daftar order — lalu mendarat di grid produk.
+ *
+ * Variabel modul, bukan state di provider, karena ini murni ingatan tampilan:
+ * tidak ada yang perlu dirender ulang saat ia berubah, dan ia memang harus mati
+ * bersama proses aplikasinya (sif berikutnya mulai dari Kasir lagi).
+ */
+let tabTerakhir: Tab = "cashier";
+
+/**
  * Pemilih tab Kasir/Order. ToastProvider, ShiftProvider, dan CartProvider tidak
  * lagi dipasang di sini melainkan di app/_layout.tsx — halaman keranjang,
  * pelunasan, dan kas adalah rute sebelah layar ini, bukan anaknya, dan provider
@@ -57,7 +73,11 @@ export default function AppShell() {
   // (lib/cart-context.tsx) — halaman keranjang membacanya juga, dan dua salinan
   // akan menyimpang.
   const { testMode: modeUji, setTestMode: setModeUji, savedTick } = useCart();
-  const [tab, setTab] = useState<Tab>("cashier");
+  const [tab, setTabState] = useState<Tab>(tabTerakhir);
+  const setTab = useCallback((next: Tab) => {
+    tabTerakhir = next;
+    setTabState(next);
+  }, []);
   const [debug, setDebug] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pengaturanOpen, setPengaturanOpen] = useState(false);
@@ -102,7 +122,7 @@ export default function AppShell() {
     if (savedTick === 0) return;
     bumpOrders();
     setTab("orders");
-  }, [savedTick, bumpOrders]);
+  }, [savedTick, bumpOrders, setTab]);
 
   const handleOpenShift = async (modalAwal: number) => {
     await mulai(modalAwal);

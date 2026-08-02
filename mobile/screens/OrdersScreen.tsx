@@ -531,10 +531,16 @@ export default function OrdersScreen({
                       style={styles.cardAction}
                     />
                   </View>
+                  {/* Order pending tanpa item bukan lagi kemustahilan: "Hapus
+                      Semua Item" di layar Ubah membuang isinya dan menyerahkan
+                      meja yang sama dalam keadaan kosong. payOrder menolaknya
+                      dengan EMPTY_ORDER, tapi menolak SESUDAH kasir membuka
+                      layar pelunasan dan mungkin sudah menerima uang. Lebih
+                      baik tombolnya belum ada. */}
                   <Button
                     label="Pelunasan"
                     variant="primary"
-                    disabled={!shiftAktif}
+                    disabled={!shiftAktif || itemCount === 0}
                     onPress={() => {
                       if (!gateShift("melunasi order")) return;
                       // Gerbang tarif. payOrder tetap melempar sebagai lapis

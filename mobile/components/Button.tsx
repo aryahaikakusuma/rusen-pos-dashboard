@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -30,11 +31,17 @@ interface ButtonProps {
   loading?: boolean;
   loadingLabel?: string;
   /**
-   * Wajib diisi kalau `label` hanya ikon. Tanpa ini tombolnya tak bernama bagi
-   * pembaca layar, dan emoji dibacakan apa adanya ("sapu") tanpa menyebut apa
-   * yang akan terjadi.
+   * Wajib diisi kalau tombolnya hanya ikon. Tanpa ini tombolnya tak bernama
+   * bagi pembaca layar — dan sebuah bentuk yang digambar sendiri tidak
+   * dibacakan sama sekali, tidak seperti emoji yang setidaknya berbunyi "tong
+   * sampah" tanpa menyebut apa yang akan terjadi.
    */
   accessibilityLabel?: string;
+  /**
+   * Menggantikan teks `label` di dalam tombol. `label` tetap wajib dan tetap
+   * jadi nama cadangan bagi pembaca layar kalau accessibilityLabel kosong.
+   */
+  icon?: ReactNode;
   labelStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
 }
@@ -47,6 +54,7 @@ export default function Button({
   loading,
   loadingLabel,
   accessibilityLabel,
+  icon,
   labelStyle,
   style,
 }: ButtonProps) {
@@ -75,6 +83,8 @@ export default function Button({
             {loadingLabel ?? label}
           </Text>
         </View>
+      ) : icon ? (
+        icon
       ) : (
         <Text style={[styles.label, styles[`${variant}Label`], labelStyle]}>
           {label}

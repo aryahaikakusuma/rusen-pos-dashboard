@@ -55,8 +55,13 @@ const MESSAGES: Record<OrderErrorCode, string> = {
   EMPLOYEE_NOT_FOUND: "Pegawai tidak dikenali. Silakan login ulang.",
   PRODUCT_NOT_FOUND: "Produk tidak ditemukan.",
   TABLE_CODE_REQUIRED: "Kode meja/order wajib diisi.",
+  // Sejak 0026 keterangan bebas pajak tidak diminta lagi di mana pun di
+  // aplikasi ini, jadi kode ini hanya bisa datang dari SERVER yang belum
+  // menerima migrasi itu. Kasir tidak punya kolom untuk mengisinya dan
+  // "coba lagi" tidak akan pernah berhasil — kalimatnya harus menunjuk ke
+  // orang yang bisa memperbaikinya, bukan menyuruh kasir mengetik.
   TAX_EXEMPT_REASON_REQUIRED:
-    "Keterangan bebas pajak wajib diisi. Tulis nama instansi atau alasannya.",
+    "Server belum menerima pembaruan bebas pajak. Order tersimpan di perangkat; hubungi pemilik.",
   TEST_REASON_REQUIRED:
     "Alasan mode uji wajib diisi. Tulis untuk apa order uji ini dibuat.",
   CATALOG_NOT_READY:

@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 
@@ -8,9 +15,12 @@ import Sheet from "../components/Sheet";
 import ShiftBanner from "../components/ShiftBanner";
 import StatusBadge from "../components/StatusBadge";
 import { useToast } from "../components/Toast";
+import TrashIcon from "../components/TrashIcon";
+import XIcon from "../components/XIcon";
 import { translateOrderError } from "../db/errors";
 import {
   changeTableCode,
+  clearOrderItems,
   getOrder,
   voidAllOrderItems,
   voidOrderItem,
@@ -64,6 +74,16 @@ export default function EditOrderScreen({
   const [newTableCode, setNewTableCode] = useState("");
   const [clearing, setClearing] = useState(false);
   const [clearReason, setClearReason] = useState("");
+  const [emptying, setEmptying] = useState(false);
+  const [emptyReason, setEmptyReason] = useState("");
+
+  /**
+   * Kunci yang sebenarnya. `busy` cuma state — ia baru terbaca pada render
+   * berikutnya, jadi dua ketukan cepat pada tombol yang sama bisa keduanya lolos
+   * dengan `order.version` yang sama; yang kedua kena STALE_ORDER padahal kasir
+   * tidak salah apa-apa. Alasan yang sama dengan busyRef di halaman Tambah item.
+   */
+  const busyRef = useRef(false);
 
   const reload = useCallback(async () => {
     setOrder(await getOrder(db, orderId));
@@ -84,14 +104,19 @@ export default function EditOrderScreen({
 
   const run = useCallback(
     async (label: string, action: () => Promise<unknown>) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
       setBusy(true);
       try {
         await action();
         toast.success(label);
+        return true;
       } catch (caught) {
         toast.error(translateOrderError(caught));
+        return false;
       } finally {
         await reload();
+        busyRef.current = false;
         setBusy(false);
       }
     },
@@ -120,14 +145,60 @@ export default function EditOrderScreen({
     if (!gateShift("membatalkan item")) return;
     if (!order || !session) return;
     setClearing(false);
-    void run("Semua item dibatalkan", () =>
-      voidAllOrderItems(db, {
-        orderId,
-        employeeId: session.employeeId,
-        reason: clearReason,
-        expectedVersion: order.version,
-      })
-    );
+    void (async () => {
+      const ok = await run("Meja dibatalkan", () =>
+        voidAllOrderItems(db, {
+          orderId,
+          employeeId: session.employeeId,
+          reason: clearReason,
+          expectedVersion: order.version,
+        })
+      );
+      // Order-nya sudah void: tidak ada lagi yang bisa dikerjakan di layar ini,
+      // dan membiarkannya terbuka berarti kasir menatap meja yang sudah tidak
+      // ada sampai ia sendiri menekan Kembali. Hanya kalau berhasil — kalau
+      // gagal, pesan kesalahannya harus terbaca di tempat kejadiannya.
+      if (ok) onClose();
+    })();
+  };
+
+  /**
+   * Mengosongkan isi meja. Bukan `run`: kalau berhasil, order yang dipegang
+   * layar ini sudah bukan order yang sama lagi, jadi yang menyusul bukan
+   * reload() melainkan pindah rute ke order penggantinya. reload() hanya untuk
+   * jalur gagal, supaya layar tidak tertinggal memegang version basi.
+   */
+  const handleEmptyItems = () => {
+    if (!gateShift("mengosongkan isi meja")) return;
+    if (!order || !session || busyRef.current) return;
+    const current = order;
+    const reason = emptyReason;
+    setEmptying(false);
+    busyRef.current = true;
+    setBusy(true);
+    void (async () => {
+      try {
+        const { orderId: nextOrderId } = await clearOrderItems(db, {
+          orderId,
+          employeeId: session.employeeId,
+          reason,
+          expectedVersion: current.version,
+        });
+        toast.success(
+          `Isi ${tableLabel(current.table_code, current.table_seq)} dikosongkan`
+        );
+        router.replace({
+          pathname: "/edit-order/[id]",
+          params: { id: nextOrderId },
+        });
+      } catch (caught) {
+        toast.error(translateOrderError(caught));
+        await reload();
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    })();
   };
 
   const openChangeTable = () => {
@@ -137,7 +208,8 @@ export default function EditOrderScreen({
 
   const handleChangeTable = async () => {
     if (!gateShift("memindah meja")) return;
-    if (!order) return;
+    if (!order || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       await changeTableCode(db, {
@@ -156,6 +228,7 @@ export default function EditOrderScreen({
     } catch (caught) {
       toast.error(translateOrderError(caught));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -177,35 +250,43 @@ export default function EditOrderScreen({
     <View style={styles.screen}>
       {!shiftAktif ? <ShiftBanner /> : null}
       <View style={styles.header}>
-        <View style={styles.headerStatus}>
-          <StatusBadge status={order.status} />
-        </View>
         <View style={styles.headerRow}>
+          {/* Nomor meja besar, statusnya kecil tepat di bawahnya: yang dicari
+              kasir saat menoleh ke layar adalah "meja mana ini", dan status
+              hanya perlu terbaca setelah ia menemukannya. */}
           <View style={styles.headerText}>
-            <Text style={styles.title}>
+            <Text style={styles.title} numberOfLines={1}>
               {tableLabel(order.table_code, order.table_seq)}
             </Text>
+            <StatusBadge status={order.status} />
           </View>
           <View style={styles.headerActions}>
             {/* Ikon saja, karena tiga tombol berlabel penuh tidak muat di baris
-                ini. Yang merah hanya glifnya; variannya tetap "secondary"
+                ini. Yang merah hanya ikonnya; variannya tetap "secondary"
                 supaya latar tombol tetap polos. Tong sampah merah menandai
                 aksinya merusak, tanpa memberi tombol ini bobot visual "danger"
                 penuh — di header, kotak merah pekat menonjol persis seperti
                 tombol yang memang dituju kasir, padahal ini justru yang paling
                 tidak boleh tertekan tanpa sengaja. Peringatannya ada di
-                konfirmasi. */}
-            {editable && order.items.length > 0 ? (
+                konfirmasi.
+
+                Ini tombol BATALKAN MEJA: order ikut batal dan mejanya lepas.
+                Yang cuma membuang isinya adalah "Hapus Semua Item" di kaki
+                layar. Keduanya membatalkan item lewat jalur yang sama; yang
+                berbeda hanya nasib mejanya sesudah itu. Tetap tampil pada meja
+                tanpa item — meja kosong lahir dari "Hapus Semua Item", dan
+                tanpa tombol ini ia jadi baris yang tidak bisa ditutup. */}
+            {editable ? (
               <Button
-                label="🗑️"
-                accessibilityLabel="Bersihkan semua item"
+                label="Batalkan meja"
+                icon={<TrashIcon size={22} />}
+                accessibilityLabel="Batalkan meja dan seluruh ordernya"
                 disabled={busy}
                 onPress={() => {
                   setClearReason("");
                   setClearing(true);
                 }}
                 style={styles.iconButton}
-                labelStyle={styles.iconLabel}
               />
             ) : null}
             {editable ? (
@@ -224,31 +305,38 @@ export default function EditOrderScreen({
       <ScrollView contentContainerStyle={styles.list}>
         {order.items.map((item) => (
           <View key={item.id} style={styles.item}>
-            <View style={styles.itemHeader}>
-              <Text style={styles.itemName}>
-                {item.product_code} · {item.product_name}
-              </Text>
-              <Text style={styles.itemSubtotal}>
-                {formatRupiah(item.subtotal)}
-              </Text>
-            </View>
-            <Text style={styles.itemMeta}>
-              {item.quantity} × {formatRupiah(item.unit_price)}
-              {item.notes ? ` · ${item.notes}` : ""}
-            </Text>
+            {/* Silang merah di kiri tiap baris, bukan tombol selebar kartu di
+                bawahnya: satu baris item kini setinggi isinya sendiri, jadi
+                order berisi enam item masih muat tanpa digulir. Sasaran
+                sentuhnya tetap touchTarget.min meski gambarnya kecil. */}
             {editable ? (
-              <Button
-                label="Batalkan item"
-                variant="danger"
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Batalkan ${item.product_name}`}
                 disabled={busy}
-                style={styles.itemAction}
                 onPress={() => {
                   setVoiding(item);
                   setVoidQty(String(item.quantity));
                   setVoidReason("");
                 }}
-              />
+                style={({ pressed }) => [
+                  styles.itemVoid,
+                  pressed && styles.itemVoidPressed,
+                  busy && styles.itemVoidDisabled,
+                ]}>
+                <XIcon size={16} />
+              </Pressable>
             ) : null}
+            <View style={styles.itemText}>
+              <Text style={styles.itemName}>
+                {item.product_code} · {item.product_name}
+              </Text>
+              <Text style={styles.itemMeta}>
+                {item.quantity} × {formatRupiah(item.unit_price)}
+                {item.notes ? ` · ${item.notes}` : ""}
+              </Text>
+            </View>
+            <Text style={styles.itemSubtotal}>{formatRupiah(item.subtotal)}</Text>
           </View>
         ))}
 
@@ -263,17 +351,41 @@ export default function EditOrderScreen({
           <Text style={styles.total}>{formatRupiah(order.total)}</Text>
         </View>
         {editable ? (
-          <Button
-            label="Tambah item"
-            variant="primary"
-            disabled={busy}
-            onPress={() =>
-              router.push({
-                pathname: "/edit-order/add",
-                params: { orderId },
-              })
-            }
-          />
+          <>
+            <Button
+              label="Tambah item"
+              variant="primary"
+              disabled={busy}
+              onPress={() =>
+                router.push({
+                  pathname: "/edit-order/add",
+                  params: { orderId },
+                })
+              }
+            />
+            {/* Teks, bukan tombol: satu tombol utama per layar (DESIGN.md), dan
+                yang berhak atas bobot itu adalah Tambah item. Aksi ini merusak
+                dan jarang, jadi ia diberi bentuk yang paling sulit tertekan
+                tanpa sengaja — tapi area ketuknya tetap setinggi touchTarget.min
+                supaya masih bisa dikenai jari, bukan ujung kuku. */}
+            {order.items.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Hapus semua item, meja tetap dipegang"
+                disabled={busy}
+                onPress={() => {
+                  setEmptyReason("");
+                  setEmptying(true);
+                }}
+                style={({ pressed }) => [
+                  styles.emptyLink,
+                  pressed && styles.emptyLinkPressed,
+                  busy && styles.emptyLinkDisabled,
+                ]}>
+                <Text style={styles.emptyLinkLabel}>Hapus Semua Item</Text>
+              </Pressable>
+            ) : null}
+          </>
         ) : (
           <Text style={styles.locked}>
             {!shiftAktif && order.status === "pending"
@@ -335,13 +447,17 @@ export default function EditOrderScreen({
           menghasilkan satu ketukan refleks. Sama seperti ClearHistoryDialog. */}
       {clearing ? (
         <Sheet
-          title="Bersihkan semua item"
+          title="Batalkan meja"
           subtitle={tableLabel(order.table_code, order.table_seq)}
           onClose={() => setClearing(false)}
           footer={
             <>
               <Button
-                label={`Batalkan ${order.items.length} item`}
+                label={
+                  order.items.length > 0
+                    ? `Batalkan meja dan ${order.items.length} item`
+                    : "Batalkan meja"
+                }
                 variant="danger"
                 disabled={busy}
                 onPress={handleClearAll}
@@ -355,9 +471,11 @@ export default function EditOrderScreen({
           }>
           <View style={styles.voidForm}>
             <Text style={styles.body}>
-              Seluruh {order.items.length} item senilai{" "}
-              {formatRupiah(order.total)} dibatalkan sekaligus, dan order ini
-              ikut batal. Tidak ada yang tersisa untuk dilunasi.
+              {order.items.length > 0
+                ? `Seluruh ${order.items.length} item senilai ${formatRupiah(
+                    order.total
+                  )} dibatalkan sekaligus, dan order ini ikut batal. Tidak ada yang tersisa untuk dilunasi.`
+                : "Meja ini sudah tidak punya item. Order-nya ditutup dan kode mejanya dilepas."}
             </Text>
             <Text style={styles.fieldLabel}>Alasan (opsional)</Text>
             <TextInput
@@ -370,7 +488,58 @@ export default function EditOrderScreen({
             <Text style={styles.hint}>
               Tiap item tetap tercatat satu per satu di laporan void, persis
               seperti dibatalkan sendiri-sendiri. Order tidak bisa dibuka lagi
-              setelah ini — buat order baru kalau pelanggan berubah pikiran.
+              setelah ini, dan kode mejanya lepas — kalau yang dimaui cuma
+              mengganti isinya, pakai "Hapus Semua Item" di kaki layar.
+            </Text>
+          </View>
+        </Sheet>
+      ) : null}
+
+      {/* Konfirmasi kedua, sengaja terpisah dari Batalkan meja: keduanya
+          membuang seluruh item, dan satu-satunya beda yang penting bagi kasir
+          adalah apa yang terjadi pada mejanya. Menggabungkannya jadi satu
+          lembar dengan dua tombol akan membuat beda itu diputuskan pada ketukan
+          terakhir, bukan pada ketukan pertama. */}
+      {emptying ? (
+        <Sheet
+          title="Hapus semua item"
+          subtitle={tableLabel(order.table_code, order.table_seq)}
+          onClose={() => setEmptying(false)}
+          footer={
+            <>
+              <Button
+                label={`Hapus ${order.items.length} item`}
+                variant="danger"
+                disabled={busy}
+                onPress={handleEmptyItems}
+              />
+              <Button
+                label="Jangan jadi"
+                disabled={busy}
+                onPress={() => setEmptying(false)}
+              />
+            </>
+          }>
+          <View style={styles.voidForm}>
+            <Text style={styles.body}>
+              Seluruh {order.items.length} item senilai{" "}
+              {formatRupiah(order.total)} dibatalkan, tapi{" "}
+              {tableLabel(order.table_code, order.table_seq)} tetap dipegang dan
+              layar ini tetap terbuka — siap diisi ulang tanpa mengetik kode
+              mejanya lagi.
+            </Text>
+            <Text style={styles.fieldLabel}>Alasan (opsional)</Text>
+            <TextInput
+              value={emptyReason}
+              onChangeText={setEmptyReason}
+              placeholder="Contoh: pesanan salah dicatat"
+              placeholderTextColor={semantic.textSecondary}
+              style={styles.input}
+            />
+            <Text style={styles.hint}>
+              Tiap item tetap tercatat satu per satu di laporan void. Di balik
+              layar, order lama ditutup dan order kosong baru dibuka di kode meja
+              yang sama — nomor strukmya berganti, mejanya tidak.
             </Text>
           </View>
         </Sheet>
@@ -429,6 +598,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    alignItems: "flex-start",
     gap: spacing.xs,
   },
   title: {
@@ -437,11 +607,6 @@ const styles = StyleSheet.create({
   },
   back: {
     paddingHorizontal: spacing.lg,
-  },
-  headerStatus: {
-    minHeight: 22,
-    alignItems: "flex-end",
-    justifyContent: "center",
   },
   headerRow: {
     flexDirection: "row",
@@ -458,30 +623,43 @@ const styles = StyleSheet.create({
   iconButton: {
     paddingHorizontal: spacing.md,
   },
-  iconLabel: {
-    fontSize: 22,
-    lineHeight: 26,
-    color: colors.status.void,
-  },
   list: {
     padding: spacing.md,
     gap: spacing.sm,
   },
   item: {
-    padding: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: semantic.border,
     backgroundColor: semantic.surface,
   },
-  itemHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing.sm,
+  itemVoid: {
+    width: touchTarget.min,
+    height: touchTarget.min,
+    marginLeft: -spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.status.void,
+  },
+  itemVoidPressed: {
+    backgroundColor: colors.status.voidLight,
+  },
+  itemVoidDisabled: {
+    opacity: 0.45,
+  },
+  itemText: {
+    flex: 1,
+    gap: 2,
   },
   itemName: {
     ...textStyles.bodyStrong,
-    flex: 1,
     color: semantic.textPrimary,
   },
   itemSubtotal: {
@@ -492,9 +670,6 @@ const styles = StyleSheet.create({
     ...textStyles.caption,
     color: semantic.textSecondary,
   },
-  itemAction: {
-    marginTop: spacing.sm,
-  },
   empty: {
     ...textStyles.body,
     padding: spacing.lg,
@@ -504,9 +679,32 @@ const styles = StyleSheet.create({
   footer: {
     gap: spacing.sm,
     padding: spacing.md,
+    // Lebih longgar di bawah daripada di sisi lain: aksi terakhir di kaki layar
+    // adalah teks, dan teks yang menempel di tepi bawah adalah teks yang
+    // bersinggungan dengan batang navigasi sistem. Inset amannya sudah diurus
+    // SafeAreaView di app/edit-order/[id].tsx; jarak ini yang membuat sentuhan
+    // di sana tidak berebut dengan gestur "kembali".
+    paddingBottom: spacing.xl,
     borderTopWidth: 1,
     borderTopColor: semantic.border,
     backgroundColor: semantic.surface,
+  },
+  emptyLink: {
+    minHeight: touchTarget.min,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+  },
+  emptyLinkPressed: {
+    backgroundColor: colors.status.voidLight,
+  },
+  emptyLinkDisabled: {
+    opacity: 0.45,
+  },
+  emptyLinkLabel: {
+    ...textStyles.caption,
+    textDecorationLine: "underline",
+    color: colors.status.void,
   },
   totalRow: {
     flexDirection: "row",

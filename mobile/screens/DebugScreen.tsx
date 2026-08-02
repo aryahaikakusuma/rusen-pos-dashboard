@@ -399,26 +399,15 @@ async function runSelfTest(
         method: "cash",
         amountReceived: 1,
         employeeId,
-        taxStatus: "taxable",
-        taxExemptReason: null,
+        taxStatus: "taxable",
       })
   );
 
-  await expectThrows(
-    "bebas pajak tanpa keterangan",
-    "TAX_EXEMPT_REASON_REQUIRED",
-    () =>
-      payOrder(db, {
-        orderId,
-        method: "cash",
-        amountReceived: 999_999,
-        employeeId,
-        taxStatus: "exempt",
-        // Spasi saja, bukan string kosong: yang dijaga adalah keterangan yang
-        // TERLIHAT terisi tapi tidak mengatakan apa-apa.
-        taxExemptReason: "   ",
-      })
-  );
+  // Dulu di sini ada expectThrows("bebas pajak tanpa keterangan",
+  // "TAX_EXEMPT_REASON_REQUIRED"). Kewajiban itu dibuang di 0026 — kasir tidak
+  // punya kolomnya lagi. Kebalikannya yang sekarang dijaga, dan penjagaannya
+  // ada di check "pelunasan bebas pajak" di bawah: tanpa keterangan HARUS
+  // berhasil, dan penyetujunya tetap tercatat.
 
   await check("pelunasan kena pajak: aritmetika + kembalian benar", async () => {
     const order = await db.getFirstAsync<{ subtotal: number }>(
@@ -444,8 +433,7 @@ async function runSelfTest(
       method: "cash",
       amountReceived: received,
       employeeId,
-      taxStatus: "taxable",
-      taxExemptReason: null,
+      taxStatus: "taxable",
     });
 
     const paid = await db.getFirstAsync<{
@@ -495,8 +483,7 @@ async function runSelfTest(
       method: "cash",
       amountReceived: 999_999,
       employeeId,
-      taxStatus: "taxable",
-      taxExemptReason: null,
+      taxStatus: "taxable",
     });
     const sesudah = await db.getFirstAsync<{ total: number; tax_amount: number }>(
       "select total, tax_amount from orders where id = ?",
@@ -523,7 +510,11 @@ async function runSelfTest(
     })
   );
 
-  await check("pelunasan bebas pajak: nol pajak, jejak lengkap", async () => {
+  // Sejak 0026: TANPA keterangan sama sekali. Itu yang membuat check ini juga
+  // menjadi penjaga bahwa pembebasan tidak lagi bisa digagalkan oleh kolom yang
+  // sudah tidak ada — kalau constraint atau payOrder diam-diam menuntutnya
+  // kembali, panggilan di bawah melempar dan check ini merah.
+  await check("pelunasan bebas pajak: nol pajak, tanpa keterangan", async () => {
     const bebas = await createOrder(db, {
       tableCode: `${tableCode}-BP`,
       employeeId,
@@ -536,7 +527,6 @@ async function runSelfTest(
       amountReceived: null,
       employeeId,
       taxStatus: "exempt",
-      taxExemptReason: "  Dinas Pendidikan  ",
     });
     const row = await db.getFirstAsync<{
       subtotal: number;
@@ -557,11 +547,15 @@ async function runSelfTest(
     if (row!.total !== row!.subtotal) {
       throw new Error(`total ${row!.total} != subtotal ${row!.subtotal}`);
     }
-    // Keterangan disimpan sudah dipangkas — yang tersimpan harus sama persis
-    // dengan yang kelak terbaca di laporan, bukan versi berspasi.
-    if (row!.tax_exempt_reason !== "Dinas Pendidikan") {
-      throw new Error(`keterangan "${row!.tax_exempt_reason}"`);
+    // Keterangan tidak diminta lagi (0026), jadi yang tersimpan harus null —
+    // bukan string kosong. Kolom kosong yang bukan null lolos begitu saja di
+    // laporan sebagai keterangan yang "ada tapi hampa".
+    if (row!.tax_exempt_reason !== null) {
+      throw new Error(`keterangan tertulis "${row!.tax_exempt_reason}"`);
     }
+    // Yang justru menjadi satu-satunya jejak audit yang tersisa. Kalau baris
+    // ini merah, pembebasan pajak sudah tidak bisa dipertanggungjawabkan ke
+    // siapa pun — dan push_order akan menolak kirimannya.
     if (row!.tax_approved_by !== employeeId) {
       throw new Error("penyetuju bukan kasir yang sedang login");
     }
@@ -594,8 +588,7 @@ async function runSelfTest(
       method: "non_cash",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
-      taxExemptReason: null,
+      taxStatus: "taxable",
     });
 
     const sebelum = await db.getFirstAsync<{
@@ -675,8 +668,7 @@ async function runSelfTest(
       method: "non_cash",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
-      taxExemptReason: null,
+      taxStatus: "taxable",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",
@@ -729,8 +721,7 @@ async function runSelfTest(
       method: "non_cash",
       amountReceived: null,
       employeeId,
-      taxStatus: "exempt",
-      taxExemptReason: "Dinas Pendidikan",
+      taxStatus: "exempt",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",
@@ -764,8 +755,7 @@ async function runSelfTest(
       method: "non_cash",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
-      taxExemptReason: null,
+      taxStatus: "taxable",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",

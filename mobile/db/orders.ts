@@ -421,57 +421,164 @@ export async function voidAllOrderItems(
       params.orderId,
       params.expectedVersion
     );
+    newVersion = await voidEveryItemWithin(txn, order, {
+      employeeId: params.employeeId,
+      reason: params.reason,
+      stamp: now(),
+    });
+  });
 
-    const items = await txn.getAllAsync<OrderItemRow>(
-      "select * from order_items where order_id = ?",
+  return newVersion;
+}
+
+/**
+ * Isi sebenarnya dari "batalkan seluruh item", dipakai bersama oleh
+ * voidAllOrderItems (batalkan meja) dan clearOrderItems (kosongkan isi).
+ * Keduanya WAJIB lewat sini: yang membedakan mereka cuma apa yang terjadi
+ * sesudahnya, bukan bagaimana item dibatalkan atau dicatat.
+ *
+ * Wajib dipanggil dari dalam transaksi yang sudah memegang `order` hasil
+ * requireEditableOrder — ia tidak memeriksa version sendiri.
+ *
+ * Order tanpa item diterima, bukan ditolak: sejak clearOrderItems ada, order
+ * pending kosong adalah keadaan yang bisa dicapai kasir, dan menolaknya di sini
+ * akan membuat meja seperti itu tidak bisa dibatalkan sama sekali.
+ */
+async function voidEveryItemWithin(
+  txn: SQLiteDatabase,
+  order: OrderRow,
+  params: { employeeId: string; reason: string; stamp: string }
+): Promise<number> {
+  const items = await txn.getAllAsync<OrderItemRow>(
+    "select * from order_items where order_id = ?",
+    [order.id]
+  );
+
+  const reason = params.reason.trim() || null;
+  for (const item of items) {
+    await txn.runAsync(
+      `insert into order_item_voids
+         (id, order_id, product_code, product_name, quantity, unit_price,
+          voided_by, reason, created_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        Crypto.randomUUID(),
+        order.id,
+        item.product_code,
+        item.product_name,
+        item.quantity,
+        item.unit_price,
+        params.employeeId,
+        reason,
+        params.stamp,
+      ]
+    );
+  }
+
+  await txn.runAsync("delete from order_items where order_id = ?", [order.id]);
+
+  // Order kosong selalu jadi 'void' dan karena itu WAJIB terkirim — sama
+  // dengan cabang penghabis di voidOrderItem, termasuk membangunkan antrean.
+  const newVersion = order.version + 1;
+  await txn.runAsync(
+    `update orders
+     set total = 0, subtotal = 0, taxable_subtotal = 0, version = ?, status = 'void', voided_at = ?,
+         voided_by = ?, void_reason = ?,
+         sync_status = 'pending', sync_error = null
+     where id = ?`,
+    [
+      newVersion,
+      params.stamp,
+      params.employeeId,
+      reason ?? "Semua item dibatalkan",
+      order.id,
+    ]
+  );
+
+  return newVersion;
+}
+
+/**
+ * "Kosongkan isi meja": buang seluruh item, tapi mejanya tetap dipegang kasir.
+ *
+ * Berbeda dari voidAllOrderItems hanya pada akhirnya. Order yang kehabisan item
+ * SELALU jadi 'void' — aturan itu dipegang bersama oleh voidOrderItem di sini
+ * dan void_order_item di Postgres (0019), dan tidak diubah oleh fungsi ini.
+ * Yang dilakukan justru sebaliknya: sesudah order lama divoid, order pending
+ * BARU langsung dibuat dengan kode meja yang sama, di dalam transaksi yang
+ * sama. Kasir tidak pernah melihat mejanya lepas, dan tidak mengetik ulang
+ * kodenya; yang berganti hanya id order — pemanggil wajib berpindah ke id yang
+ * dikembalikan.
+ *
+ * Order baru itu lahir tanpa item. Itu keadaan yang sebelumnya tidak pernah ada
+ * dan sengaja diterima: push_order tidak punya penjaga EMPTY_ORDER (jumlah item
+ * 0 cocok dengan subtotal 0), createOrder punya — karena itu barisnya ditulis
+ * di sini, bukan lewat createOrder.
+ *
+ * Penanda uji ikut disalin. Tanpa itu, mengosongkan meja di tengah sesi uji
+ * diam-diam melahirkan order yang dihitung sebagai pendapatan sungguhan.
+ */
+export async function clearOrderItems(
+  db: SQLiteDatabase,
+  params: {
+    orderId: string;
+    employeeId: string;
+    reason: string;
+    expectedVersion: number;
+  }
+): Promise<{ orderId: string }> {
+  const nextOrderId = Crypto.randomUUID();
+
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const order = await requireEditableOrder(
+      txn,
+      params.orderId,
+      params.expectedVersion
+    );
+
+    const items = await txn.getFirstAsync<{ n: number }>(
+      "select count(*) as n from order_items where order_id = ?",
       [order.id]
     );
-    if (items.length === 0) throw new OrderError("ITEM_NOT_FOUND");
+    if ((items?.n ?? 0) === 0) throw new OrderError("ITEM_NOT_FOUND");
 
     const stamp = now();
-    const reason = params.reason.trim() || null;
-    for (const item of items) {
-      await txn.runAsync(
-        `insert into order_item_voids
-           (id, order_id, product_code, product_name, quantity, unit_price,
-            voided_by, reason, created_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          Crypto.randomUUID(),
-          order.id,
-          item.product_code,
-          item.product_name,
-          item.quantity,
-          item.unit_price,
-          params.employeeId,
-          reason,
-          stamp,
-        ]
-      );
-    }
+    await voidEveryItemWithin(txn, order, {
+      employeeId: params.employeeId,
+      reason: params.reason.trim() || "Isi meja dikosongkan",
+      stamp,
+    });
 
-    await txn.runAsync("delete from order_items where order_id = ?", [order.id]);
+    // Setelah order lama jadi 'void', ia tidak lagi ikut hitungan seq — jadi
+    // meja yang cuma dipakai satu order kembali ke seq 1 dan namanya di layar
+    // tidak berubah sama sekali.
+    const seqRow = await txn.getFirstAsync<{ next_seq: number }>(
+      `select coalesce(max(table_seq), 0) + 1 as next_seq from orders
+       where table_code = ? and status = 'pending'`,
+      [order.table_code]
+    );
 
-    // Order kosong selalu jadi 'void' dan karena itu WAJIB terkirim — sama
-    // dengan cabang penghabis di voidOrderItem, termasuk membangunkan antrean.
-    newVersion = order.version + 1;
     await txn.runAsync(
-      `update orders
-       set total = 0, subtotal = 0, taxable_subtotal = 0, version = ?, status = 'void', voided_at = ?,
-           voided_by = ?, void_reason = ?,
-           sync_status = 'pending', sync_error = null
-       where id = ?`,
+      `insert into orders
+         (id, outlet_id, table_code, table_seq, status, total, subtotal,
+          taxable_subtotal, created_by, created_at, client_created_at,
+          sync_status, is_test_data, test_mode_reason)
+       values (?, ?, ?, ?, 'pending', 0, 0, 0, ?, ?, ?, 'pending', ?, ?)`,
       [
-        newVersion,
-        stamp,
+        nextOrderId,
+        order.outlet_id,
+        order.table_code,
+        seqRow?.next_seq ?? 1,
         params.employeeId,
-        reason ?? "Semua item dibatalkan",
-        order.id,
+        stamp,
+        stamp,
+        order.is_test_data ? 1 : 0,
+        order.test_mode_reason,
       ]
     );
   });
 
-  return newVersion;
+  return { orderId: nextOrderId };
 }
 
 /**
@@ -497,17 +604,10 @@ export async function payOrder(
     amountReceived: number | null;
     employeeId: string;
     taxStatus: TaxStatus;
-    /** Wajib, dan wajib tidak kosong, kalau taxStatus 'exempt'. */
-    taxExemptReason: string | null;
   }
 ): Promise<void> {
   const rateBps = await taxRateBps(db);
   if (rateBps === null) throw new OrderError("TAX_RATE_UNKNOWN");
-
-  const reason = params.taxExemptReason?.trim() || null;
-  if (params.taxStatus === "exempt" && !reason) {
-    throw new OrderError("TAX_EXEMPT_REASON_REQUIRED");
-  }
 
   await db.withExclusiveTransactionAsync(async (txn) => {
     const order = await txn.getFirstAsync<OrderRow>(
@@ -559,7 +659,13 @@ export async function payOrder(
         // tidak jadi dipungut" tidak bisa dihitung ulang setelah perda berubah.
         rateBps,
         tax,
-        params.taxStatus === "exempt" ? reason : null,
+        // Keterangan tidak diminta lagi (0026) — kasir tidak punya kolomnya,
+        // jadi yang ditulis selalu null. Kolomnya tetap ada di skema karena
+        // order lama yang sudah terlanjur punya keterangan tidak dihapus.
+        null,
+        // Penyetuju TETAP dicatat, dan tidak pernah ditanyakan: ia pegawai yang
+        // sedang login. Ini satu-satunya yang tersisa yang membuat pembebasan
+        // bisa diaudit, dan push_order menolak kiriman exempt tanpa ini.
         params.taxStatus === "exempt" ? params.employeeId : null,
         paidAt,
         params.employeeId,
