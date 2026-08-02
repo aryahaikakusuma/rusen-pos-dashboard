@@ -43,29 +43,33 @@ export default function CartScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Keranjang</Text>
+        {/* Judul sendirian di baris pertama — berbagi baris dengan tombol
+            Kembali dan kolom kode meja pernah membuatnya terpotong dua baris
+            di layar sempit. Baris kedua boleh berbagi karena subjudulnya
+            pendek dan tidak pernah tumbuh melebihi lebar layar. */}
+        <Text style={styles.title}>Keranjang</Text>
+        <View style={styles.headerRow}>
           <Text style={styles.subtitle}>
             {itemCount} item · {formatRupiah(total)}
           </Text>
+          {/* Cermin dari kolom kode meja di layar produk, bukan salinan
+              independen: sumbernya tetap sama (useCart), jadi kasir yang lupa
+              mengisinya di awal tidak perlu kembali ke layar sebelumnya. */}
+          <TextInput
+            value={tableCode}
+            onChangeText={(text) => {
+              setTableCode(text);
+              setError("");
+            }}
+            placeholder="Kode meja"
+            accessibilityLabel="Kode meja atau order, contoh A3"
+            placeholderTextColor={semantic.textSecondary}
+            style={styles.tableInput}
+            editable={!saving && orderKind === "meja"}
+            autoCapitalize="characters"
+          />
+          <Button label="Kembali" onPress={() => router.back()} />
         </View>
-        {/* Cermin dari kolom kode meja di layar produk, bukan salinan
-            independen: sumbernya tetap sama (useCart), jadi kasir yang lupa
-            mengisinya di awal tidak perlu kembali ke layar sebelumnya. */}
-        <TextInput
-          value={tableCode}
-          onChangeText={(text) => {
-            setTableCode(text);
-            setError("");
-          }}
-          placeholder="Kode meja"
-          accessibilityLabel="Kode meja atau order, contoh A3"
-          placeholderTextColor={semantic.textSecondary}
-          style={styles.tableInput}
-          editable={!saving && orderKind === "meja"}
-          autoCapitalize="characters"
-        />
-        <Button label="Kembali" onPress={() => router.back()} />
       </View>
 
       <View style={styles.body}>
@@ -115,17 +119,16 @@ const styles = StyleSheet.create({
     backgroundColor: semantic.surfaceMuted,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.xs,
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: semantic.border,
     backgroundColor: semantic.surface,
   },
-  headerText: {
-    flex: 1,
-    gap: spacing.xs,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
   },
   title: {
     ...textStyles.sectionTitle,
@@ -133,6 +136,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...textStyles.body,
+    flex: 1,
     color: semantic.textSecondary,
   },
   tableInput: {
