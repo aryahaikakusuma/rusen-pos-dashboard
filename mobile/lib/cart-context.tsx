@@ -253,8 +253,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const handleSave = useCallback(async () => {
     if (!gateShift("menyimpan order")) return;
     if (!tableCode.trim()) {
+      // Bukan toast: banner itu menutupi tombol "Kembali" di bagian atas
+      // layar Keranjang. Teks di atas tombol Simpan Order sudah tepat di
+      // tempat kasir sedang melihat.
       setError("Masukkan kode meja/order");
-      toast.error("Kode meja/order belum diisi");
       return;
     }
     if (items.length === 0) {

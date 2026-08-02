@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Button from "../components/Button";
@@ -8,7 +8,7 @@ import TableConflictDialog from "../components/TableConflictDialog";
 import { useCart } from "../lib/cart-context";
 import { formatRupiah } from "../lib/types";
 import { useShift } from "../lib/shift-context";
-import { colors, semantic, spacing, textStyles } from "../theme";
+import { colors, radius, semantic, spacing, textStyles, touchTarget } from "../theme";
 
 /**
  * Keranjang, dulu lembar di atas layar kasir (dan panel tetap di layar lebar).
@@ -23,6 +23,9 @@ export default function CartScreen() {
   const {
     items,
     tableCode,
+    setTableCode,
+    orderKind,
+    setError,
     total,
     itemCount,
     saving,
@@ -46,6 +49,22 @@ export default function CartScreen() {
             {itemCount} item · {formatRupiah(total)}
           </Text>
         </View>
+        {/* Cermin dari kolom kode meja di layar produk, bukan salinan
+            independen: sumbernya tetap sama (useCart), jadi kasir yang lupa
+            mengisinya di awal tidak perlu kembali ke layar sebelumnya. */}
+        <TextInput
+          value={tableCode}
+          onChangeText={(text) => {
+            setTableCode(text);
+            setError("");
+          }}
+          placeholder="Kode meja"
+          accessibilityLabel="Kode meja atau order, contoh A3"
+          placeholderTextColor={semantic.textSecondary}
+          style={styles.tableInput}
+          editable={!saving && orderKind === "meja"}
+          autoCapitalize="characters"
+        />
         <Button label="Kembali" onPress={() => router.back()} />
       </View>
 
@@ -115,6 +134,17 @@ const styles = StyleSheet.create({
   subtitle: {
     ...textStyles.body,
     color: semantic.textSecondary,
+  },
+  tableInput: {
+    ...textStyles.bodyStrong,
+    width: 92,
+    minHeight: touchTarget.min,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.primary[100],
+    color: semantic.textPrimary,
+    backgroundColor: colors.primary[50],
   },
   body: {
     flex: 1,
