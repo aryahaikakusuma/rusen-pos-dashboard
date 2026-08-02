@@ -44,7 +44,7 @@
         "projectId": "247500bf-2f97-4582-bcac-594ded5ea4e1"
       }
     },
-    "runtimeVersion": "2",
+    "runtimeVersion": "3",
     "updates": {
       "url": "https://u.expo.dev/247500bf-2f97-4582-bcac-594ded5ea4e1",
       "fallbackToCacheTimeout": 0,
