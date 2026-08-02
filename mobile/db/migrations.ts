@@ -241,7 +241,7 @@ create index refund_items_refund_idx on refund_items (refund_id);
  * Sif kasir — lokal saja, tidak pernah dikirim ke Postgres. Sengaja begitu:
  * uang sifnya sendiri sudah tersinkron lewat orders/refunds, tabel ini hanya
  * menandai batas waktunya. Kalau nanti perlu naik ke server, itu pekerjaan
- * terpisah (lihat FUTURE_TO_DO.md) yang menuntut migrasi Postgres, RLS, dan
+ * terpisah (lihat TO_DO.md) yang menuntut migrasi Postgres, RLS, dan
  * perubahan push_order — tidak dipaksakan masuk di sini.
  *
  * Batas sif: opened_at..closed_at (atau opened_at..sekarang selama terbuka).

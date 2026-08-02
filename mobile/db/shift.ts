@@ -150,7 +150,7 @@ export async function shiftTotals(
   // tunai yang pada praktiknya dibayar pakai uang laci tidak akan terhitung
   // di sini, dan akan muncul sebagai selisih KURANG yang terlihat persis
   // seperti salah hitung. Data yang ada tidak bisa membedakan keduanya —
-  // obatnya kolom metode di `refunds`, pekerjaan terpisah (FUTURE_TO_DO.md).
+  // obatnya kolom metode di `refunds`, pekerjaan terpisah (TO_DO.md).
   const refundTunai = await db.getFirstAsync<{ amount: number }>(
     `select coalesce(sum(r.amount), 0) as amount
      from refunds r
