@@ -31,6 +31,7 @@ import { useGateShift, useShift } from "../lib/shift-context";
 import { formatRupiah, tableLabel } from "../lib/types";
 import {
   colors,
+  fontSize,
   radius,
   semantic,
   spacing,
@@ -294,10 +295,16 @@ export default function EditOrderScreen({
                 label="Ganti Meja"
                 disabled={busy}
                 onPress={openChangeTable}
+                labelStyle={styles.headerButtonLabel}
                 style={styles.headerButton}
               />
             ) : null}
-            <Button label="Kembali" onPress={onClose} style={styles.headerButton} />
+            <Button
+              label="Kembali"
+              onPress={onClose}
+              labelStyle={styles.headerButtonLabel}
+              style={styles.headerButton}
+            />
           </View>
         </View>
       </View>
@@ -598,6 +605,11 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    // Tanpa ini kolom kirinya tidak pernah menyusut di bawah lebar teksnya
+    // sendiri: `flex: 1` hanya membagi SISA ruang, dan tiga tombol berukuran
+    // penuh tidak menyisakan apa-apa. Nomor mejanya terpotong jadi "T…" dan
+    // badge statusnya jatuh satu huruf per baris.
+    minWidth: 0,
     alignItems: "flex-start",
     gap: spacing.xs,
   },
@@ -615,13 +627,28 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
+    // Tombolnya sudah sekecil yang masih layak disentuh; yang boleh mengalah
+    // kalau ruangnya kurang adalah teks di kiri, bukan sasaran sentuh di sini.
+    flexShrink: 0,
   },
+  // Tiga tombol di satu baris header, jadi ukurannya diturunkan dari default
+  // Button (minHeight 64, padding lg, teks 18) ke ambang bawah yang masih boleh
+  // disentuh: touchTarget.min. Ini satu-satunya tempat di aplikasi yang
+  // memampatkan Button — di layar lain tombolnya berdiri sendiri dan tidak
+  // perlu berbagi baris dengan apa pun.
   headerButton: {
-    paddingHorizontal: spacing.md,
+    minHeight: touchTarget.min,
+    paddingHorizontal: spacing.sm,
+  },
+  headerButtonLabel: {
+    fontSize: fontSize.sm,
   },
   iconButton: {
-    paddingHorizontal: spacing.md,
+    width: touchTarget.min,
+    minHeight: touchTarget.min,
+    paddingHorizontal: 0,
   },
   list: {
     padding: spacing.md,
