@@ -188,13 +188,16 @@ export default function EditOrderScreen({
           </View>
           <View style={styles.headerActions}>
             {/* Ikon saja, karena tiga tombol berlabel penuh tidak muat di baris
-                ini. Tetap "secondary" walau aksinya merusak — warna merah di
-                header membuatnya menonjol persis seperti tombol yang memang
-                dituju kasir, padahal ini justru yang paling tidak boleh
-                tertekan tanpa sengaja. Peringatannya ada di konfirmasi. */}
+                ini. Yang merah hanya glifnya; variannya tetap "secondary"
+                supaya latar tombol tetap polos. Tong sampah merah menandai
+                aksinya merusak, tanpa memberi tombol ini bobot visual "danger"
+                penuh — di header, kotak merah pekat menonjol persis seperti
+                tombol yang memang dituju kasir, padahal ini justru yang paling
+                tidak boleh tertekan tanpa sengaja. Peringatannya ada di
+                konfirmasi. */}
             {editable && order.items.length > 0 ? (
               <Button
-                label="🧹"
+                label="🗑️"
                 accessibilityLabel="Bersihkan semua item"
                 disabled={busy}
                 onPress={() => {
@@ -458,6 +461,7 @@ const styles = StyleSheet.create({
   iconLabel: {
     fontSize: 22,
     lineHeight: 26,
+    color: colors.status.void,
   },
   list: {
     padding: spacing.md,
