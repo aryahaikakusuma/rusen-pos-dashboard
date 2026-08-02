@@ -63,7 +63,7 @@ type CashAmount =
  * Sengaja tetap, bukan dihitung dari tagihan: yang disodorkan pelanggan adalah
  * lembaran uang, dan letak tombolnya yang tidak pernah berpindah itu sendiri
  * yang membuat kasir bisa menekannya tanpa membaca. Tagihan yang tidak
- * terlayani satu pun dari ketiganya ditangani "Nominal Manual" di bawahnya.
+ * terlayani satu pun dari ketiganya ditangani "Nominal Manual" di atasnya.
  */
 const NOMINAL_CEPAT = [20000, 50000, 100000] as const;
 
@@ -368,6 +368,31 @@ export default function PayScreen() {
 
         {channel === "cash" ? (
           <View style={styles.cashBlock}>
+            {/* Selebar penuh di atas grid, bukan kotak kelima seukuran yang
+                lain: ia bukan nominal tetap, ia jalan masuk untuk angka apa pun.
+                Bentuk yang berbeda menyampaikan itu tanpa satu kata pun. */}
+            {manualOpen ? (
+              <TextInput
+                value={cash?.kind === "manual" ? cash.text : ""}
+                onChangeText={(text) =>
+                  setCash({ kind: "manual", text: text.replace(/[^0-9]/g, "") })
+                }
+                keyboardType="number-pad"
+                placeholder="Ketik nominal diterima"
+                placeholderTextColor={semantic.textSecondary}
+                style={styles.input}
+                editable={!submitting}
+                autoFocus
+              />
+            ) : (
+              <Button
+                label="Nominal Manual"
+                disabled={submitting}
+                labelStyle={styles.manualLabel}
+                onPress={bukaManual}
+              />
+            )}
+
             <View style={styles.grid}>
               <Button
                 label="Uang Pas"
@@ -393,32 +418,6 @@ export default function PayScreen() {
                 />
               ))}
             </View>
-
-            {/* Selebar penuh di bawah grid, bukan kotak kelima seukuran yang
-                lain: ia bukan nominal, ia jalan keluar ketika keempat di
-                atasnya tidak menjawab. Bentuk yang berbeda menyampaikan itu
-                tanpa satu kata pun. */}
-            {manualOpen ? (
-              <TextInput
-                value={cash?.kind === "manual" ? cash.text : ""}
-                onChangeText={(text) =>
-                  setCash({ kind: "manual", text: text.replace(/[^0-9]/g, "") })
-                }
-                keyboardType="number-pad"
-                placeholder="Ketik nominal diterima"
-                placeholderTextColor={semantic.textSecondary}
-                style={styles.input}
-                editable={!submitting}
-                autoFocus
-              />
-            ) : (
-              <Button
-                label="Nominal Manual"
-                disabled={submitting}
-                labelStyle={styles.manualLabel}
-                onPress={bukaManual}
-              />
-            )}
           </View>
         ) : (
           <View style={styles.methodRow}>
