@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   title: {
-    ...textStyles.screenTitle,
+    ...textStyles.sectionTitle,
     color: semantic.textPrimary,
   },
   subtitle: {
@@ -137,9 +137,9 @@ const styles = StyleSheet.create({
   },
   tableInput: {
     ...textStyles.bodyStrong,
-    width: 92,
-    minHeight: touchTarget.min,
-    paddingHorizontal: spacing.sm,
+    width: 124,
+    minHeight: touchTarget.primaryAction,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 2,
     borderColor: colors.primary[100],
