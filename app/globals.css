@@ -84,6 +84,42 @@
 }
 
 /*
+ * Angka besar pada kartu KPI, saat barisnya dipaksa muat dalam satu baris.
+ *
+ * `BarisKpi` menetapkan kolom sebanyak kartunya di `xl` ke atas, jadi lebar tiap
+ * kartu tidak lagi ditentukan isinya. "Rp 32.175.000" pada 23px butuh sekitar
+ * 170px, dan lima kartu pada area konten 1280px hanya menyisakan sekitar 144px
+ * untuk teks — jadi ukuran tetap akan memotong digit, tepat pada angka uang, di
+ * mana digit yang hilang tidak terlihat seperti kesalahan sama sekali.
+ *
+ * Ukurannya karena itu diturunkan dari lebar kolom yang benar-benar tersedia:
+ *
+ *   area konten  = 100vw - 316px      (sidebar 260 + padding main 2 x 28)
+ *   lebar kolom  = (area - 16px x (kolom - 1)) / kolom     (gap-4 antar kartu)
+ *   ruang teks   = lebar kolom - 36px                      (padding kartu 2 x 18)
+ *
+ * Pembagi 8,5 dan potongan 3px adalah lebar glif Poppins extrabold untuk string
+ * rupiah terpanjang yang wajar (13 karakter), diukur bukan ditebak. `clamp`
+ * menahannya di 14px–23px: di bawah 14px angkanya berhenti terbaca, di atas 23px
+ * tidak ada gunanya lebih besar dari desain aslinya.
+ *
+ * Hanya berlaku di `xl` ke atas, karena hanya di sana barisnya dipaksa. Di bawah
+ * itu kisinya membungkus dan kartu kembali selebar aslinya.
+ */
+@media (min-width: 80rem) {
+  .kpi-angka {
+    font-size: clamp(
+      14px,
+      calc(
+        (100vw - 316px - 16px * (var(--kolom, 4) - 1)) / var(--kolom, 4) / 8.5 -
+          3px
+      ),
+      23px
+    );
+  }
+}
+
+/*
  * Cetak laporan manajer ke A4/PDF.
  *
  * Blok sebelumnya di sini mencetak struk 72mm. Itu sudah tidak berlaku: struk

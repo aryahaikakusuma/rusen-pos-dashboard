@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Children, type CSSProperties, type ReactNode } from "react";
 
 import { persen } from "@/lib/format";
 
@@ -87,7 +87,10 @@ export function Kpi({
       </div>
       <p
         className={`text-ink mt-1.5 mb-1 font-extrabold tracking-[-0.7px] ${
-          kecil ? "text-base leading-snug" : "text-[23px]"
+          // `kecil` dipakai untuk nama produk, bukan angka — ia sudah kecil dan
+          // boleh membungkus dua baris, jadi penyusutan `kpi-angka` tidak
+          // berlaku padanya.
+          kecil ? "text-base leading-snug" : "kpi-angka text-[23px]"
         }`}
       >
         {nilai}
@@ -97,9 +100,33 @@ export function Kpi({
   );
 }
 
+/**
+ * Baris kartu angka — SATU BARIS PENUH di layar lebar, berapa pun jumlahnya.
+ *
+ * DULU `auto-fit` DENGAN `minmax(190px, 1fr)`, DAN ITU YANG MEMBUAT KARTU KELIMA
+ * TURUN SENDIRIAN. `auto-fit` memuat sebanyak yang muat pada lebar minimum itu,
+ * jadi jumlah kolomnya ditentukan lebar layar, bukan jumlah kartunya. Pada area
+ * konten sekitar 1000px, 190px hanya memuat empat — dan kartu kelima jatuh ke
+ * baris kedua sebagai satu kartu lebar penuh yang terbaca seperti kelompok
+ * terpisah, padahal ia anggota kelompok yang sama. Selisihnya cuma beberapa
+ * piksel, jadi ia muncul dan hilang tergantung ukuran jendela.
+ *
+ * Sekarang jumlah kolomnya ADALAH jumlah kartunya, dihitung dari `children` dan
+ * diturunkan sebagai `--kolom`. Tidak ada angka jumlah kartu yang ditulis di
+ * halaman mana pun: menambah atau membuang satu `<Kpi>` langsung mengubah
+ * kisinya, jadi tidak ada yang bisa lupa disesuaikan.
+ *
+ * Di bawah `xl` ia kembali membungkus, dan itu disengaja — memaksa enam kartu
+ * sebaris di tablet hanya memindahkan masalahnya jadi angka yang terpotong.
+ */
 export function BarisKpi({ children }: { children: ReactNode }) {
+  const kolom = Children.count(children);
+
   return (
-    <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
+    <div
+      style={{ "--kolom": kolom } as CSSProperties}
+      className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4 xl:[grid-template-columns:repeat(var(--kolom),minmax(0,1fr))]"
+    >
       {children}
     </div>
   );
