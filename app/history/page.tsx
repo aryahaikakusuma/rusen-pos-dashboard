@@ -1,6 +1,4 @@
-import NavHeader from "@/components/NavHeader";
 import { getPaidOrders } from "@/lib/queries";
-import { requireSession } from "@/lib/session";
 import { formatRupiah, tableLabel } from "@/lib/types";
 
 const formatDateTime = (iso: string | null) =>
@@ -11,17 +9,18 @@ const formatDateTime = (iso: string | null) =>
       }).format(new Date(iso))
     : "-";
 
+// Sesi dijaga `app/history/layout.tsx`; halaman ini murni menampilkan.
 export default async function HistoryPage() {
-  const session = await requireSession();
   const orders = await getPaidOrders();
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <NavHeader employeeName={session.name} role={session.role} />
+    <>
+      <p className="text-ink-3 mb-4 text-sm">
+        100 transaksi lunas terakhir, lengkap dengan rincian itemnya. Untuk
+        rekap per periode, gunakan Laporan Penjualan.
+      </p>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <h2 className="mb-4 text-xl font-bold text-slate-900">Histori Transaksi</h2>
-
+      <div>
         {orders.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white py-16 text-center text-slate-500">
             Belum ada transaksi lunas.
@@ -100,7 +99,7 @@ export default async function HistoryPage() {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 

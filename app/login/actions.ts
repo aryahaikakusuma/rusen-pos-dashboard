@@ -1,28 +1,36 @@
 "use server";
 
 // Catatan Next.js 16: di file "use server", SETIAP export wajib berupa fungsi
-// async. Konstanta seperti PIN_LENGTH karena itu tinggal di lib/types.ts.
+// async.
 
-import bcrypt from "bcryptjs";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { verifyPassword } from "@/lib/auth";
 import { db } from "@/lib/supabase/server";
 import { clearSessionCookie, setSessionCookie } from "@/lib/session";
-import { PIN_LENGTH, type EmployeeRole } from "@/lib/types";
 
-const MAX_FAILED_ATTEMPTS = 5;
+const MAX_FAILED_ATTEMPTS = 8;
 const WINDOW_MS = 60_000;
 
-// Pesan yang sama untuk PIN salah maupun pegawai nonaktif — jangan sampai
-// balasan error memberi tahu penebak bahwa suatu PIN "hampir benar".
-const GENERIC_ERROR = "PIN tidak dikenali. Coba lagi.";
+// Pesan yang sama untuk email tidak dikenal maupun password salah — jangan
+// sampai balasan error memberi tahu penebak bahwa suatu email terdaftar.
+const GENERIC_ERROR = "Email atau password salah.";
 
-export async function login(pin: string): Promise<{ error: string }> {
-  if (!new RegExp(`^\\d{${PIN_LENGTH}}$`).test(pin)) {
-    return { error: GENERIC_ERROR };
+export async function login(
+  _previous: { error: string } | null,
+  formData: FormData
+): Promise<{ error: string }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    return { error: "Email dan password wajib diisi." };
   }
 
+  // Pembatasan laju tetap dipertahankan dari login PIN yang lama. Alamat web
+  // bisa dihantam robot terus-menerus, dan Supabase Auth punya batasnya sendiri
+  // tapi per proyek, bukan per alamat IP.
   const ip = await clientIp();
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
 
@@ -36,34 +44,17 @@ export async function login(pin: string): Promise<{ error: string }> {
     return { error: "Terlalu banyak percobaan. Tunggu sebentar." };
   }
 
-  // PIN adalah satu-satunya identitas — tidak ada nama pengguna — jadi PIN harus
-  // dicocokkan ke setiap pegawai aktif. Dengan segelintir pegawai ini murah.
-  const { data: employees } = await db
-    .from("employees")
-    .select("id, name, role, pin_hash")
-    .eq("active", true);
+  const user = await verifyPassword(email, password);
 
-  let matched: { id: string; name: string; role: EmployeeRole } | null = null;
-  for (const employee of employees ?? []) {
-    if (await bcrypt.compare(pin, employee.pin_hash)) {
-      matched = { id: employee.id, name: employee.name, role: employee.role };
-      break;
-    }
-  }
-
-  if (!matched) {
+  if (!user) {
     await db.from("login_attempts").insert({ ip });
     return { error: GENERIC_ERROR };
   }
 
   await db.from("login_attempts").delete().eq("ip", ip);
-  await setSessionCookie({
-    employeeId: matched.id,
-    name: matched.name,
-    role: matched.role,
-  });
+  await setSessionCookie({ userId: user.id, email: user.email });
 
-  redirect("/history");
+  redirect("/dashboard");
 }
 
 export async function logout(): Promise<void> {

@@ -28,6 +28,33 @@
   --color-login-primary: #1e3a5f;
   --color-login-accent: #059669;
   --color-login-muted: #10192e;
+
+  /* ------------------------------------------------------------------
+     Dashboard manajer.
+     Palet ini SENGAJA berbeda dari biru primer di atas. DESIGN.md mengunci
+     biru untuk satu tombol aksi utama di layar kasir, supaya di tengah antrean
+     tidak ada dua tombol yang sama-sama menarik jari. Dashboard tidak punya
+     masalah itu: tidak ada transaksi yang bisa dirusak salah pencet, dan
+     layarnya penuh angka yang perlu dibedakan satu sama lain. Warnanya diambil
+     dari mockup dashboard/index.html.
+     ------------------------------------------------------------------ */
+  --color-brand: #04c99e;
+  --color-brand-dark: #00a6a3;
+  --color-brand-soft: #e6faf5;
+  --color-brand-line: #36d4b1;
+
+  --color-ink: #1b2321;
+  --color-ink-2: #404545;
+  --color-ink-3: #77807e;
+  --color-line: #e4e8e7;
+  --color-surface: #f4f6f6;
+
+  --color-danger: #df2a36;
+  --color-danger-soft: #fdecee;
+  --color-good: #1f7a2b;
+  --color-good-soft: #e9f7eb;
+  --color-warn: #c77700;
+  --color-warn-soft: #fff6e5;
 }
 
 @layer base {
@@ -57,26 +84,46 @@
 }
 
 /*
- * Cetak struk. Struk di-portal menjadi anak langsung <body>, jadi seluruh anak
- * <body> lain cukup di-`display: none` — ini juga mencegah layout aplikasi
- * menyisakan halaman kosong di belakang struk.
+ * Cetak laporan manajer ke A4/PDF.
+ *
+ * Blok sebelumnya di sini mencetak struk 72mm. Itu sudah tidak berlaku: struk
+ * hanya dicetak aplikasi HP lewat printer termal, dan komponennya sudah tidak
+ * ada di repositori ini. Yang dicetak dari web sekarang hanya lembar laporan.
+ *
+ * Elemen yang tidak ada gunanya di atas kertas ditandai `.no-print` di
+ * komponennya masing-masing — navigasi, pemilih tanggal, tombol export, dan
+ * paginasi. Sisanya dibiarkan mengalir apa adanya supaya tabel panjang boleh
+ * berpindah halaman.
  */
 @media print {
   body {
     background: #fff;
   }
 
-  body > *:not(#receipt-print) {
+  .no-print {
     display: none !important;
   }
 
-  #receipt-print {
-    display: block !important;
-    width: 72mm;
-    color: #000;
+  .cetak-lepas {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  table {
+    font-size: 10px;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
   }
 
   @page {
-    margin: 4mm;
+    margin: 14mm;
+    size: A4;
   }
 }

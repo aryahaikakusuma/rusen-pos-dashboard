@@ -45,8 +45,22 @@ export async function requireSession(): Promise<Session> {
   return session;
 }
 
-export async function requireManager(): Promise<Session> {
-  const session = await requireSession();
-  if (session.role === "cashier") redirect("/history");
-  return session;
+/**
+ * Versi untuk Route Handler: MENGEMBALIKAN `null`, tidak redirect.
+ *
+ * Route handler yang di-redirect ke /login akan membalas HTML halaman login
+ * dengan status 200, dan `fetch` di browser membacanya sebagai keberhasilan lalu
+ * gagal mem-parse JSON — pesan errornya menyesatkan. Yang benar 401, dan
+ * pemanggilnya yang memutuskan mau mengarahkan ke mana.
+ */
+export async function apiSession(): Promise<Session | null> {
+  return getSession();
+}
+
+/** Balasan seragam untuk route yang dipanggil tanpa sesi sah. */
+export function unauthorized(): Response {
+  return Response.json(
+    { error: "Sesi tidak ditemukan atau sudah berakhir. Silakan masuk lagi." },
+    { status: 401 }
+  );
 }

@@ -30,5 +30,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // supabase/functions berjalan di Deno, bukan Node: ia meng-import lewat
+  // penentu `npm:` dan memakai global `Deno`, keduanya tidak dikenal tsc di
+  // sini. Memasukkannya membuat `npm run typecheck` selalu merah karena
+  // kesalahan yang bukan kesalahan — dan pemeriksaan yang selalu merah sama
+  // saja dengan tidak ada pemeriksaan.
+  "exclude": ["node_modules", "supabase/functions"]
 }
