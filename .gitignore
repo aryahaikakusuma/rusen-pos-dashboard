@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# catatan kerja: laporan audit/revisi yang berguna selama sebuah perubahan
+# sedang berjalan dan menyesatkan sesudahnya, karena tidak ada yang menjaganya
+# tetap sejalan dengan kode. Keputusan yang layak disimpan pindah ke MIGRATION.md.
+/outputs

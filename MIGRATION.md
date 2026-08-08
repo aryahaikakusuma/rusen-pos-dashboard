@@ -47,7 +47,11 @@ landed 7 August 2026; both have their own sections before step 8. `0027` is appl
 which is what the dashboard points at. Read the Tahap 2 section before touching anything under
 `app/` — in particular, the login is Supabase Auth and no longer a PIN, every API route is
 guarded by `jaga()` rather than by its own check, and `dasar_pbjt` must not be displayed on
-exempt orders. `npm run periksa:laporan` is the gate.
+exempt orders. `npm run periksa:laporan` is the gate. A display round on 8 August 2026 (Tahap 2.1)
+moved the range picker into the pages, folded Cetak and Unduh Excel into that same bar, renamed
+"Penjualan Harian" to "Penjualan per Periode", and added the multi-series chart there. It also
+left `0028` on **both** databases with **no caller at all** — see the end of that section before
+assuming a product chart exists.
 
 **Where to pick up, in the order that makes sense:**
 
@@ -1933,8 +1937,79 @@ offering them.
 (cashier, payment method, receipt search) needs `p_kasir`/`p_metode`/`p_cari` parameters on
 `laporan_penjualan_detail`, because filtering the 25 rows that happen to be on screen gives a
 different answer on every page while the row counter keeps quoting the unfiltered total. A real
-`order_kind` column is the other, and belongs to `mobile/`. `dashboard/index.html` is kept until
-Heika has compared the pages against it.
+`order_kind` column is the other, and belongs to `mobile/`. `dashboard/index.html` was kept until
+Heika had compared the pages against it, then deleted — it was untracked, so it is gone for good.
+
+## Dashboard Tahap 2.1 — period control, the period chart, and `0028` ✅ (web only)
+
+A round of display changes on top of Tahap 2, plus one migration that is **applied but not yet
+called by anything**. Read the last paragraph before assuming a product chart exists.
+
+**The range picker moved out of the topbar and into the content, and `SubTab` was deleted.**
+`KontrolPeriode` now sits inside each page, directly above the numbers it changes. In the topbar
+it spanned the whole app and therefore read as global — except Kelola Produk and Histori do not
+know about periods at all and the picker was hidden there, so a control that promises "applies
+everywhere" and then vanishes is worse than one that plainly belongs to one block of data. The
+sub-tabs went with it: tabs and sidebar links looked like twins, but only the tabs carried the
+period, so two identical-looking controls quietly produced different numbers.
+
+The three granularity buttons **change the range itself**, not just the step size of the arrows.
+As a step size they were invisible state — pressing "Bulanan" changed nothing on screen and only
+revealed its meaning after an arrow was pressed. Their active state is derived from the range
+(`granularitas()`), never stored separately, so picking 3–17 August from the calendar turns all
+three off, which is honest: that range is not a day, a week, or a month.
+
+**Cetak / PDF and Unduh Excel joined that same bar, top right.** They had three different layouts
+across three pages, plus two small duplicate "🖨 Cetak" buttons in table headers. Both actions
+emit *the selected range* — the XLSX filename even contains its dates — so they belong beside the
+range picker, not in a bar that spans the app. The export kind comes from the path via
+`jenisExport()` rather than a prop, so a fourth report is one line and a new page cannot silently
+lose its buttons by forgetting to pass one. First attempt put them after the two small readouts
+(`p_dari/p_sampai` and `Data per …`) on the same flex row, and at ordinary widths they wrapped to
+a second line — those readouts push, so button position depended on the length of the date label.
+The readouts now have their own row underneath.
+
+**"Penjualan Harian" is now "Penjualan per Periode".** "Harian" is the *grain of the rows*, not
+the range; the page has always served whatever range is selected, and the old label read as if it
+could only show one day. The route, the Postgres function, and the export kind stay `harian`,
+because the grain genuinely did not change. Only the sidebar label and the page title moved.
+
+**That page gained a multi-series chart with per-series checkboxes** — Penjualan, Tertagih, PBJT,
+Refund, Transaksi — every one of them a finished column from `laporan_penjualan_harian`. Transaksi
+gets its own right-hand Y axis, which is not decoration: it is counted in orders (tens) against
+rupiah (millions), and on one axis its line lies flat on zero and reads as days with no sales. The
+axis only appears when that series is on. Chart.js's own legend was replaced with checkboxes
+because clicking its labels only strikes them through, which on a narrow screen is not
+distinguishable from a rendering oddity.
+
+**Two series from the design were deliberately not built, and both need the database.** "Laba
+Kotor" has no cost price anywhere in the schema — `products` carries only `price` — so drawing it
+means equating profit with revenue, producing a line that lands exactly on top of Penjualan and
+reads as a 100% margin. That is not a rough number, it is a wrong one. "Total Produk" per date has
+no time axis in `laporan_produk`, which aggregates the whole period into one row per variant.
+
+**A single-date range prints "Tidak berlaku untuk harian" instead of the chart.** Every series uses
+`pointRadius: 0`, so one data point renders a truly empty canvas — grid and axes only —
+indistinguishable from data that failed to arrive, and people press reload waiting for something
+that is never coming. The condition is `baris.length < 2`, not the granularity button: 3–3 August
+picked from the calendar is also one point and lights up no button at all. The KPI cards and the
+table stay fully populated; only the shape of the trend does not apply.
+
+**`0028_laporan_produk_harian.sql` is applied to both databases and has no caller.** It gives
+Laporan Produk the time axis `laporan_produk` lacks — one row per variant per WIB date, empty
+dates filled with zero, `p_kode` empty meaning the top `p_teratas` (default 5) by period revenue.
+It is a *new function* rather than extra parameters on `laporan_produk`, because `create or
+replace` with a new signature does not replace anything in Postgres: it creates an overload, and
+old callers stay silently bound to the old one. Grep confirms nothing in `app/`, `lib/`,
+`components/`, or `scripts/` calls it yet. So: it is real, it is deployed, it is verified by
+nothing, and the product chart it was written for **does not exist**. Whoever builds that chart
+should run `periksa:laporan`-style assertions against it first — in particular that its revenue,
+summed over the period, equals `laporan_produk` for the same variants, since both are gross and
+neither subtracts refunds.
+
+**`outputs/` is gitignored.** It holds working notes from audit and revision passes — process
+records, not source. They are useful while a change is in flight and misleading afterwards,
+because nothing keeps them in step with the code.
 
 ## Step 8 — Device and store builds
 
