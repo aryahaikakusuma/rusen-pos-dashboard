@@ -23,7 +23,11 @@ export const MENU: Tautan[] = [
 ];
 
 export const LAPORAN: Tautan[] = [
-  { href: "/dashboard/laporan/harian", label: "Penjualan Harian", ikon: "📅" },
+  {
+    href: "/dashboard/laporan/harian",
+    label: "Penjualan per Periode",
+    ikon: "📅",
+  },
   { href: "/dashboard/laporan/detail", label: "Detail Penjualan", ikon: "🧾" },
   { href: "/dashboard/laporan/produk", label: "Laporan Produk", ikon: "📦" },
 ];
@@ -35,7 +39,7 @@ export const LAINNYA: Tautan[] = [
 const JUDUL: Record<string, string> = {
   "/dashboard": "Dashboard Penjualan",
   "/dashboard/produk": "Kelola Produk",
-  "/dashboard/laporan/harian": "Laporan Penjualan Harian",
+  "/dashboard/laporan/harian": "Penjualan per Periode",
   "/dashboard/laporan/detail": "Detail Penjualan",
   "/dashboard/laporan/produk": "Laporan Produk",
   "/history": "Histori Transaksi",
@@ -48,4 +52,27 @@ export function judulHalaman(pathname: string): string {
 /** Halaman yang tidak punya rentang tanggal tidak perlu pemilihnya di topbar. */
 export function pakaiPeriode(pathname: string): boolean {
   return pathname !== "/dashboard/produk" && pathname !== "/history";
+}
+
+/**
+ * Jenis berkas export milik sebuah halaman, atau `null` kalau halaman itu tidak
+ * punya lembar untuk dicetak maupun diunduh.
+ *
+ * Peta ini yang menentukan munculnya tombol Cetak dan Unduh Excel di topbar,
+ * dan namanya sengaja SAMA dengan segmen route `/api/export/[jenis]` — kalau
+ * suatu saat ada laporan keempat, satu baris di sini adalah seluruh perubahan
+ * yang dibutuhkan di sisi rangka halaman.
+ *
+ * Nilainya diambil dari path, bukan dari prop yang dioper tiap halaman: topbar
+ * dirender oleh layout, jauh di atas halaman, jadi menurunkannya lewat prop
+ * berarti setiap halaman baru bisa lupa mengirimnya dan tombolnya hilang tanpa
+ * error apa pun.
+ */
+export function jenisExport(
+  pathname: string
+): "harian" | "detail" | "produk" | null {
+  if (pathname === "/dashboard/laporan/harian") return "harian";
+  if (pathname === "/dashboard/laporan/detail") return "detail";
+  if (pathname === "/dashboard/laporan/produk") return "produk";
+  return null;
 }

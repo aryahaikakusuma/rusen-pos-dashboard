@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
+import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import {
   BarisKpi,
   IsiKartu,
@@ -16,7 +17,7 @@ import { angka, bagi, delta, persen, rupiah, rupiahRingkas } from "@/lib/format"
 import { useData } from "@/lib/use-data";
 import { usePeriode } from "@/lib/use-periode";
 import type { BarisProduk } from "@/lib/kontrak";
-import { jumlahHari, labelPeriode, tanggalPendek } from "@/lib/periode";
+import { periodeSebelumnya, tanggalPendek } from "@/lib/periode";
 import { totalHarian } from "@/lib/ringkas";
 
 /**
@@ -52,6 +53,13 @@ export default function DashboardPage() {
 
   const T = useMemo(() => totalHarian(baris), [baris]);
   const S = useMemo(() => totalHarian(sebelumnya), [sebelumnya]);
+
+  // p_dari/p_sampai mentah dari periode pembanding — bukan `sebelumnya` yang
+  // datang dari API (itu barisnya, bukan rentangnya), tapi dihitung ulang di
+  // sini dengan fungsi yang SAMA persis dipakai route handler
+  // (`periodeSebelumnya`), supaya kaki KPI menunjukkan rentang yang benar-benar
+  // dikirim, bukan rentang yang dikira dikirim.
+  const pembanding = useMemo(() => periodeSebelumnya(periode), [periode]);
 
   const kategori = useMemo(() => perKategori(barisProduk), [barisProduk]);
   const terlaris = useMemo(
@@ -187,15 +195,39 @@ export default function DashboardPage() {
     [T]
   );
 
-  if (harian.galat) return <Gagal pesan={harian.galat} coba={harian.muatUlang} />;
-  if (harian.memuat && !harian.data) return <SedangMemuat tinggi="h-96" />;
+  const waktuData =
+    harian.pada === null || produk.pada === null
+      ? null
+      : Math.min(harian.pada, produk.pada);
+
+  // Kontrol periode di ATAS cabang galat — lihat catatan yang sama di halaman
+  // Penjualan Harian.
+  if (harian.galat) {
+    return (
+      <>
+        <KontrolPeriode waktuData={waktuData} />
+        <Gagal pesan={harian.galat} coba={harian.muatUlang} />
+      </>
+    );
+  }
+  if (harian.memuat && !harian.data) {
+    return (
+      <>
+        <KontrolPeriode waktuData={waktuData} />
+        <SedangMemuat tinggi="h-96" />
+      </>
+    );
+  }
 
   const hariAda = baris.filter((b) => b.jumlah_order > 0).length;
 
   return (
     <>
+      <KontrolPeriode waktuData={waktuData} />
+
+      {/* Rentang dan jumlah hari sudah dinyatakan kontrol di atas; yang tersisa
+          di sini hanya keterangan yang tidak ada di sana. */}
       <div className="text-ink-3 mb-5 text-sm">
-        {labelPeriode(periode)} · {jumlahHari(periode)} hari ·{" "}
         {hariAda} hari ada penjualan · data uji dikecualikan
       </div>
 
@@ -204,7 +236,7 @@ export default function DashboardPage() {
           label="Omzet Kotor"
           nilai={rupiah(T.omzet_kotor)}
           delta={delta(T.omzet_kotor, S.omzet_kotor)}
-          kaki={`Periode setara sebelumnya ${rupiah(S.omzet_kotor)}`}
+          kaki={`Periode setara sebelumnya ${rupiah(S.omzet_kotor)} (p_dari=${pembanding.dari} p_sampai=${pembanding.sampai})`}
         />
         <Kpi
           label="PBJT Terpungut"

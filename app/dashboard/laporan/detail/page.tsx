@@ -3,16 +3,14 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
+import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import { BarisKpi, IsiKartu, Kartu, KepalaKartu, Kpi } from "@/components/dashboard/Kartu";
-import { Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
-import SubTab from "@/components/dashboard/SubTab";
+import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Tanda, Td, Th } from "@/components/dashboard/Tabel";
-import TombolUnduh from "@/components/dashboard/TombolUnduh";
 import { Api } from "@/lib/api-klien";
 import { angka, bagi, rupiah } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import { usePeriode } from "@/lib/use-periode";
-import { jumlahHari, labelPeriode } from "@/lib/periode";
 
 const PER_HALAMAN = [25, 50, 100];
 
@@ -70,6 +68,20 @@ export default function DetailPenjualanPage() {
     );
   }, [harian.data]);
 
+  /**
+   * Halaman ini punya DUA sumber yang bisa tiba pada saat berbeda, jadi satu
+   * penanda waktu harus memilih. Yang dipakai adalah yang PALING TUA — itu umur
+   * hal tertua yang sedang terpampang. Memakai yang terbaru akan mengklaim
+   * kesegaran untuk blok yang belum tentu ikut diperbarui.
+   *
+   * Selama salah satunya belum pernah tiba, tidak ada waktu yang bisa
+   * dinyatakan sama sekali.
+   */
+  const waktuData =
+    detail.pada === null || harian.pada === null
+      ? null
+      : Math.min(detail.pada, harian.pada);
+
   function pindah(ke: number, perHalaman = limit) {
     const berikut = new URLSearchParams(params);
     berikut.set("halaman", String(ke));
@@ -83,16 +95,12 @@ export default function DetailPenjualanPage() {
 
   return (
     <>
-      <SubTab />
+      <KontrolPeriode waktuData={waktuData} />
 
-      <div className="no-print mb-5 flex flex-wrap items-center gap-3">
-        <div className="border-line text-ink-2 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium">
-          📅 {labelPeriode(periode)} · {jumlahHari(periode)} hari
-        </div>
-        <span className="flex-1" />
-        <TombolUnduh jenis="detail" periode={periode} />
-      </div>
-
+      {/* Dua sumber, dua penanda: kartu KPI datang dari laporan HARIAN dan
+          tabel dari laporan DETAIL, jadi keduanya bisa selesai pada saat yang
+          berbeda. Satu penanda gabungan akan berbohong tentang salah satunya. */}
+      <AreaData menyegarkan={harian.memuat}>
       <div className="no-print">
         <BarisKpi>
           <Kpi label="Order Lunas" nilai={angka(ringkas.order)} kaki="Seluruh periode" />
@@ -114,25 +122,18 @@ export default function DetailPenjualanPage() {
           />
         </BarisKpi>
       </div>
+      </AreaData>
 
       {detail.galat ? (
         <Gagal pesan={detail.galat} coba={detail.muatUlang} />
       ) : detail.memuat && !detail.data ? (
         <SedangMemuat tinggi="h-96" />
       ) : (
+        <AreaData menyegarkan={detail.memuat}>
         <Kartu className="overflow-hidden">
           <KepalaKartu
             judul="Detail Transaksi Penjualan"
             sub={`${angka(totalBaris)} order · halaman ${halaman} dari ${totalHalaman}`}
-            aksi={
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="border-line text-ink-2 hover:border-brand hover:text-brand-dark no-print cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold"
-              >
-                🖨 Cetak
-              </button>
-            }
           />
 
           <Gulung>
@@ -265,6 +266,7 @@ export default function DetailPenjualanPage() {
             </label>
           </div>
         </Kartu>
+        </AreaData>
       )}
 
       <Kartu className="no-print mt-4">

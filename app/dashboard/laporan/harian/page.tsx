@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
-import { BarisKpi, Kpi } from "@/components/dashboard/Kartu";
-import { Gagal, SedangMemuat } from "@/components/dashboard/Status";
-import SubTab from "@/components/dashboard/SubTab";
+import Grafik, { WARNA } from "@/components/dashboard/Grafik";
+import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
+import { BarisKpi, IsiKartu, Kartu, KepalaKartu, Kpi } from "@/components/dashboard/Kartu";
+import { AreaData, Gagal, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
-import TombolUnduh from "@/components/dashboard/TombolUnduh";
 import { Api } from "@/lib/api-klien";
-import { angka, bagi, persen, rupiah } from "@/lib/format";
+import type { BarisHarian } from "@/lib/kontrak";
+import { angka, bagi, persen, rupiah, rupiahRingkas } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import { usePeriode } from "@/lib/use-periode";
 import {
@@ -21,7 +22,14 @@ import {
 import { totalHarian } from "@/lib/ringkas";
 
 /**
- * Penjualan Harian — satu baris per tanggal WIB.
+ * Penjualan per Periode — satu baris per tanggal WIB.
+ *
+ * Namanya berubah dari "Penjualan Harian" karena yang dulu disebut "harian"
+ * adalah GRAIN barisnya, bukan rentangnya: halaman ini sudah sejak awal
+ * melayani rentang apa pun yang dipilih di kontrol periode, dan "Harian" di
+ * sidebar terbaca seolah ia hanya bisa menampilkan satu hari. Route, fungsi
+ * Postgres, dan nama jenis export tetap `harian` — itu grain, dan grain-nya
+ * memang tidak berubah.
  *
  * Tanggal tanpa transaksi tetap muncul sebagai nol. Itu bukan kelebihan baris:
  * kalau hari sepi hilang dari daftar, garis tren melompat dari tanggal 3 ke
@@ -37,7 +45,7 @@ import { totalHarian } from "@/lib/ringkas";
 export default function PenjualanHarianPage() {
   const { periode } = usePeriode();
 
-  const { data, memuat, galat, muatUlang } = useData(
+  const { data, memuat, galat, muatUlang, pada } = useData(
     () => Api.harian(periode),
     [periode.dari, periode.sampai]
   );
@@ -45,44 +53,51 @@ export default function PenjualanHarianPage() {
   const baris = useMemo(() => data?.baris ?? [], [data]);
   const T = useMemo(() => totalHarian(baris), [baris]);
 
+  const hariAda = baris.filter((b) => b.jumlah_order > 0).length;
+  const tertinggi = [...baris].sort((a, b) => b.omzet_kotor - a.omzet_kotor)[0];
+
+  /**
+   * Kontrol periode berada DI ATAS cabang galat dan pemuat pertama, bukan di
+   * dalamnya. Dulu ia di topbar, jadi ia selalu ada apa pun keadaan halaman.
+   * Kalau ia ikut hilang saat permintaan gagal, satu-satunya jalan keluar dari
+   * rentang yang bermasalah adalah menyunting URL — dan tombol "Coba lagi"
+   * hanya mengulang permintaan yang sama.
+   */
   if (galat) {
     return (
       <>
-        <SubTab />
+        <KontrolPeriode waktuData={pada} />
         <Gagal pesan={galat} coba={muatUlang} />
       </>
     );
   }
-
   if (memuat && !data) {
     return (
       <>
-        <SubTab />
+        <KontrolPeriode waktuData={pada} />
         <SedangMemuat tinggi="h-96" />
       </>
     );
   }
 
-  const hariAda = baris.filter((b) => b.jumlah_order > 0).length;
-  const tertinggi = [...baris].sort((a, b) => b.omzet_kotor - a.omzet_kotor)[0];
-
   return (
     <>
-      <SubTab />
+      <KontrolPeriode waktuData={pada} />
 
-      <div className="no-print mb-5 flex flex-wrap items-center gap-3">
-        <div className="border-line text-ink-2 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium">
-          📅 {labelPeriode(periode)} · {jumlahHari(periode)} hari
-        </div>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="border-line text-ink-2 hover:border-brand hover:text-brand-dark cursor-pointer rounded-[10px] border bg-white px-4 py-2.5 text-[13px] font-semibold transition-colors"
-        >
-          🖨 Cetak / PDF
-        </button>
-        <TombolUnduh jenis="harian" periode={periode} />
+      {/* Chip periode yang dulu berdiri di sini dihapus: label rentang sudah
+          jadi bagian kontrol di atas, dan dua tempat yang menyatakan periode
+          yang sama hanya menambah tempat untuk berselisih. Kop periode di
+          lembar CETAK di bawah tetap ada — itu identitas berkas arsipnya.
+
+          Tombol Cetak dan Unduh Excel yang dulu satu baris sendiri di sini kini
+          duduk di ujung kanan topbar bersama dua laporan lainnya; lihat
+          `AksiLaporan`. */}
+
+      {/* Kontrol periode dan tombol ekspor tetap di luar: labelnya justru yang
+          sedang benar. Yang harus ditandai usang adalah angkanya. */}
+      <AreaData menyegarkan={memuat}>
+      <div className="no-print">
+        <GrafikPeriode baris={baris} />
       </div>
 
       <div className="no-print">
@@ -123,7 +138,7 @@ export default function PenjualanHarianPage() {
       <div className="border-line cetak-lepas rounded-2xl border bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.06)] lg:p-8">
         <header className="border-ink mb-5 flex flex-wrap justify-between gap-5 border-b-2 pb-4">
           <div>
-            <h2 className="text-xl font-extrabold">Laporan Penjualan Harian</h2>
+            <h2 className="text-xl font-extrabold">Laporan Penjualan</h2>
             <p className="text-ink-3 mt-1 text-[13px]">
               Rusen Kopitiam · {data?.outlet ?? "—"}
             </p>
@@ -319,7 +334,222 @@ export default function PenjualanHarianPage() {
           {sekarangWib()}
         </p>
       </div>
+      </AreaData>
     </>
+  );
+}
+
+/* -------------------------------------------------- grafik penjualan periode */
+
+/**
+ * Deret yang bisa dinyalakan-dimatikan di grafik.
+ *
+ * SEMUANYA KOLOM YANG SUDAH JADI dari `laporan_penjualan_harian`. Tidak ada
+ * yang dihitung ulang di sini — kalau suatu deret butuh angka yang belum ada
+ * kolomnya, tempatnya migrasi, bukan berkas ini.
+ *
+ * DUA DERET DI CONTOH RANCANGAN SENGAJA TIDAK ADA:
+ *
+ * - "Laba Kotor". Skema ini tidak menyimpan harga pokok sama sekali —
+ *   `products` hanya punya `price`. Laba kotor tanpa modal berarti menyamakan
+ *   laba dengan omzet, dan garis yang persis menimpa garis Penjualan akan
+ *   terbaca sebagai margin 100%. Itu bukan angka yang kurang teliti, itu angka
+ *   yang salah.
+ * - "Total Produk" per tanggal. `laporan_produk` berjalan pada grain varian
+ *   untuk SELURUH periode dan tidak membawa tanggal, jadi jumlah item per hari
+ *   tidak bisa diambil dari mana pun tanpa fungsi baru.
+ *
+ * Keduanya butuh perubahan database, dan itu urusan Tahap 1.
+ */
+const DERET = [
+  { id: "penjualan", label: "Penjualan", warna: WARNA.brandGaris, uang: true },
+  { id: "tertagih", label: "Tertagih", warna: WARNA.biru, uang: true },
+  { id: "pbjt", label: "PBJT", warna: WARNA.kuning, uang: true },
+  { id: "refund", label: "Refund", warna: WARNA.merah, uang: true },
+  { id: "transaksi", label: "Transaksi", warna: WARNA.abuTua, uang: false },
+] as const;
+
+type IdDeret = (typeof DERET)[number]["id"];
+
+const NILAI: Record<IdDeret, (b: BarisHarian) => number> = {
+  penjualan: (b) => b.omzet_kotor,
+  tertagih: (b) => b.tertagih,
+  pbjt: (b) => b.pbjt,
+  refund: (b) => b.total_refund,
+  transaksi: (b) => b.jumlah_order,
+};
+
+/**
+ * Grafik penjualan per periode, dengan deret yang bisa dimatikan satu-satu.
+ *
+ * DUA SUMBU-Y, DAN ITU WAJIB. "Transaksi" dihitung dalam order — puluhan —
+ * sementara sisanya rupiah — jutaan. Pada satu sumbu, garis transaksi menempel
+ * rata di garis nol dan terlihat seperti hari tanpa penjualan. Sumbu kanan
+ * hanya muncul saat deret itu menyala, supaya tidak ada skala menganggur yang
+ * mengundang salah baca.
+ *
+ * Legenda bawaan Chart.js diganti kotak centang sendiri karena legendanya hanya
+ * mencoret label saat diklik: pada layar sempit hasilnya tidak jelas apakah
+ * deret itu mati atau hanya labelnya yang aneh. Kotak centang menyatakannya
+ * tanpa perlu ditebak, dan bisa dijangkau keyboard.
+ *
+ * Bertanda `no-print`: yang dicetak adalah lembar laporan di bawah. Kanvas
+ * dirender lewat WebGL/2D context yang hasilnya tidak selalu ikut ke printer,
+ * dan halaman kertas yang kadang berisi grafik kadang kosong lebih buruk
+ * daripada yang konsisten tidak berisi.
+ */
+function GrafikPeriode({ baris }: { baris: BarisHarian[] }) {
+  const [tampil, setTampil] = useState(true);
+  const [aktif, setAktif] = useState<Set<IdDeret>>(
+    () => new Set<IdDeret>(["penjualan", "transaksi", "pbjt"])
+  );
+
+  const adaTransaksi = aktif.has("transaksi");
+
+  /**
+   * Rentang satu tanggal tidak punya grafik, dan itu bukan kegagalan memuat.
+   *
+   * Satu titik data menghasilkan garis tanpa panjang: dengan `pointRadius: 0`
+   * yang dipakai seluruh deret di sini, kanvasnya benar-benar kosong — hanya
+   * kisi dan sumbu. Kotak kosong itu tidak bisa dibedakan dari data yang gagal
+   * datang, dan orang akan menekan muat ulang berkali-kali menunggu sesuatu
+   * yang memang tidak akan pernah muncul.
+   *
+   * Angkanya sendiri tidak hilang: seluruh kartu KPI dan tabel di bawah tetap
+   * terisi. Yang tidak berlaku hanya bentuk trennya.
+   */
+  const satuTanggal = baris.length < 2;
+
+  const config = useMemo<Parameters<typeof Grafik>[0]["config"]>(
+    () => ({
+      type: "line",
+      data: {
+        labels: baris.map((b) => tanggalPendek(b.tanggal).slice(0, 6)),
+        datasets: DERET.filter((d) => aktif.has(d.id)).map((d) => ({
+          label: d.label,
+          data: baris.map(NILAI[d.id]),
+          borderColor: d.warna,
+          backgroundColor: d.warna,
+          borderWidth: d.id === "penjualan" ? 3 : 2,
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          yAxisID: d.uang ? "y" : "y2",
+        })),
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          // Kotak centang di atas sudah jadi legendanya.
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const n = Number(c.parsed.y ?? 0);
+                return c.dataset.yAxisID === "y2"
+                  ? `${c.dataset.label}: ${angka(n)} order`
+                  : `${c.dataset.label}: ${rupiah(n)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (v) => rupiahRingkas(Number(v)) },
+            grid: { color: WARNA.kisi },
+          },
+          y2: {
+            display: adaTransaksi,
+            position: "right",
+            beginAtZero: true,
+            ticks: { callback: (v) => `${angka(Number(v))} order` },
+            grid: { display: false },
+          },
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } },
+        },
+      },
+    }),
+    [baris, aktif, adaTransaksi]
+  );
+
+  function alih(id: IdDeret) {
+    setAktif((lama) => {
+      const baru = new Set(lama);
+      // Deret terakhir tidak boleh ikut dimatikan: grafik tanpa satu pun deret
+      // menyisakan kotak kosong bergaris kisi yang terbaca sebagai galat.
+      if (baru.has(id) && baru.size > 1) baru.delete(id);
+      else baru.add(id);
+      return baru;
+    });
+  }
+
+  return (
+    <Kartu className="mb-4 overflow-hidden">
+      <KepalaKartu
+        judul="Grafik Penjualan per Periode"
+        sub="Per tanggal WIB · tanggal tanpa transaksi tetap digambar sebagai nol"
+        aksi={
+          <button
+            type="button"
+            onClick={() => setTampil((v) => !v)}
+            aria-expanded={tampil}
+            className="text-brand-dark hover:text-brand cursor-pointer text-[13px] font-semibold whitespace-nowrap"
+          >
+            {tampil ? "Sembunyikan ▲" : "Tampilkan ▼"}
+          </button>
+        }
+      />
+
+      {tampil && satuTanggal ? (
+        <IsiKartu>
+          <div className="border-line text-ink-3 grid h-[160px] place-items-center rounded-xl border border-dashed px-4 text-center">
+            <div>
+              <p className="text-ink-2 text-sm font-bold">
+                Tidak berlaku untuk harian
+              </p>
+              <p className="mt-1 text-[13px]">
+                Grafik ini menggambar tren antar tanggal, dan rentang satu hari
+                cuma punya satu titik. Pilih Mingguan atau Bulanan di sebelah
+                kiri untuk melihatnya.
+              </p>
+            </div>
+          </div>
+        </IsiKartu>
+      ) : tampil ? (
+        <IsiKartu>
+          <div className="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-2">
+            {DERET.map((d) => (
+              <label
+                key={d.id}
+                className="text-ink-2 flex cursor-pointer items-center gap-1.5 text-[13px] font-medium"
+              >
+                <input
+                  type="checkbox"
+                  checked={aktif.has(d.id)}
+                  onChange={() => alih(d.id)}
+                  className="accent-brand h-4 w-4 cursor-pointer"
+                />
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: d.warna }}
+                />
+                {d.label}
+              </label>
+            ))}
+          </div>
+
+          <Grafik
+            config={config}
+            tinggi="h-[320px]"
+            judulAksesibilitas="Grafik penjualan per tanggal"
+          />
+        </IsiKartu>
+      ) : null}
+    </Kartu>
   );
 }
 

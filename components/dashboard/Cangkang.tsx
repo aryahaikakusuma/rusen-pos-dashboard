@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 
 import { logout } from "@/app/login/actions";
 import { usePeriode } from "@/lib/use-periode";
-import RentangTanggal from "./RentangTanggal";
 import {
   LAINNYA,
   LAPORAN,
@@ -37,9 +36,25 @@ export default function Cangkang({
 }) {
   const pathname = usePathname();
   const [bukaMenu, setBukaMenu] = useState(false);
-  const { periode, setPeriode } = usePeriode();
+  const { periode } = usePeriode();
 
   const inisial = email.slice(0, 2).toUpperCase();
+
+  /**
+   * Periode ikut terbawa saat berpindah laporan lewat sidebar.
+   *
+   * Ini satu-satunya navigasi antar laporan sekarang — tab di area konten
+   * dihapus karena keduanya terlihat kembar tapi hanya tab yang membawa
+   * periode, jadi dua kontrol yang sama bentuknya diam-diam menghasilkan angka
+   * berbeda. Yang dibawa adalah periode yang sudah diselesaikan `usePeriode`,
+   * bukan query string mentah, supaya berpindah dari halaman tanpa rentang
+   * (Kelola Produk, Histori) tetap mendarat pada rentang yang sama dengan yang
+   * barusan terbaca, bukan pada bawaan yang kebetulan sama.
+   */
+  const tautanPeriode = (href: string) =>
+    pakaiPeriode(href)
+      ? `${href}?dari=${periode.dari}&sampai=${periode.sampai}`
+      : href;
 
   return (
     <div className="bg-surface text-ink min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
@@ -64,6 +79,7 @@ export default function Cangkang({
             <Item
               key={tautan.href}
               tautan={tautan}
+              href={tautanPeriode(tautan.href)}
               aktif={pathname === tautan.href}
               onKlik={() => setBukaMenu(false)}
             />
@@ -74,7 +90,7 @@ export default function Cangkang({
             {LAPORAN.map((tautan) => (
               <Link
                 key={tautan.href}
-                href={tautan.href}
+                href={tautanPeriode(tautan.href)}
                 onClick={() => setBukaMenu(false)}
                 className={`rounded-lg px-3 py-2 text-[13px] transition-colors ${
                   pathname === tautan.href
@@ -92,6 +108,7 @@ export default function Cangkang({
             <Item
               key={tautan.href}
               tautan={tautan}
+              href={tautanPeriode(tautan.href)}
               aktif={pathname === tautan.href}
               onKlik={() => setBukaMenu(false)}
             />
@@ -137,10 +154,15 @@ export default function Cangkang({
 
           <span className="flex-1" />
 
-          {pakaiPeriode(pathname) ? (
-            <RentangTanggal periode={periode} onPilih={setPeriode} />
-          ) : null}
+          {/* Pemilih rentang TIDAK di sini lagi. Ia pindah ke dalam kartu
+              konten tiap halaman (`KontrolPeriode`), tepat di atas angka yang
+              dipengaruhinya — di topbar ia terbaca berlaku untuk seluruh
+              aplikasi, padahal dua halaman tidak mengenal periode sama sekali
+              dan pemilihnya memang menghilang di sana.
 
+              Cetak dan Unduh Excel ikut ke sana: keduanya mengeluarkan RENTANG
+              yang sedang dipilih, jadi tempatnya di sebelah pemilih rentang
+              itu, bukan di baris yang membentang ke seluruh aplikasi. */}
           <div className="bg-brand-soft text-brand-dark hidden h-9 w-9 place-items-center rounded-full text-xs font-bold sm:grid">
             {inisial}
           </div>
@@ -162,16 +184,18 @@ function Label({ children }: { children: ReactNode }) {
 
 function Item({
   tautan,
+  href,
   aktif,
   onKlik,
 }: {
   tautan: Tautan;
+  href: string;
   aktif: boolean;
   onKlik: () => void;
 }) {
   return (
     <Link
-      href={tautan.href}
+      href={href}
       onClick={onKlik}
       className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 whitespace-nowrap transition-colors ${
         aktif

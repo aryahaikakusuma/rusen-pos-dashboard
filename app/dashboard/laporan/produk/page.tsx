@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
+import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import {
   BarisKpi,
   IsiKartu,
@@ -10,16 +11,13 @@ import {
   KepalaKartu,
   Kpi,
 } from "@/components/dashboard/Kartu";
-import { Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
-import SubTab from "@/components/dashboard/SubTab";
+import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
-import TombolUnduh from "@/components/dashboard/TombolUnduh";
 import { Api } from "@/lib/api-klien";
 import { angka, bagi, persen, rupiah, rupiahRingkas } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import { usePeriode } from "@/lib/use-periode";
 import type { BarisProduk } from "@/lib/kontrak";
-import { jumlahHari, labelPeriode } from "@/lib/periode";
 
 type Urutan = "omzet" | "terjual" | "lambat";
 
@@ -46,7 +44,7 @@ export default function LaporanProdukPage() {
   const [cari, setCari] = useState("");
   const [urutan, setUrutan] = useState<Urutan>("omzet");
 
-  const { data, memuat, galat, muatUlang } = useData(
+  const { data, memuat, galat, muatUlang, pada } = useData(
     () => Api.produkLaporan(periode),
     [periode.dari, periode.sampai]
   );
@@ -229,19 +227,20 @@ export default function LaporanProdukPage() {
     [kategori, totalOmzet]
   );
 
+  // Kontrol periode di ATAS cabang galat — lihat catatan yang sama di halaman
+  // Penjualan Harian.
   if (galat) {
     return (
       <>
-        <SubTab />
+        <KontrolPeriode waktuData={pada} />
         <Gagal pesan={galat} coba={muatUlang} />
       </>
     );
   }
-
   if (memuat && !data) {
     return (
       <>
-        <SubTab />
+        <KontrolPeriode waktuData={pada} />
         <SedangMemuat tinggi="h-96" />
       </>
     );
@@ -251,7 +250,7 @@ export default function LaporanProdukPage() {
 
   return (
     <>
-      <SubTab />
+      <KontrolPeriode waktuData={pada} />
 
       <div className="no-print mb-5 flex flex-wrap items-center gap-3">
         <input
@@ -269,13 +268,9 @@ export default function LaporanProdukPage() {
           <option value="terjual">Urutkan: Terjual terbanyak</option>
           <option value="lambat">Urutkan: Paling lambat laku</option>
         </select>
-        <div className="border-line text-ink-2 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium">
-          📅 {labelPeriode(periode)} · {jumlahHari(periode)} hari
-        </div>
-        <span className="flex-1" />
-        <TombolUnduh jenis="produk" periode={periode} />
       </div>
 
+      <AreaData menyegarkan={memuat}>
       <div className="no-print">
         <BarisKpi>
           <Kpi
@@ -333,15 +328,6 @@ export default function LaporanProdukPage() {
         <KepalaKartu
           judul="Rekap Performa Varian"
           sub={`${angka(tampil.length)} dari ${angka(semua.length)} varian ditampilkan`}
-          aksi={
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="border-line text-ink-2 hover:border-brand hover:text-brand-dark no-print cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold"
-            >
-              🖨 Cetak
-            </button>
-          }
         />
 
         <Gulung>
@@ -411,6 +397,7 @@ export default function LaporanProdukPage() {
           </table>
         </Gulung>
       </Kartu>
+      </AreaData>
 
       <Kartu className="no-print mt-4">
         <IsiKartu className="text-ink-3 text-xs leading-relaxed">

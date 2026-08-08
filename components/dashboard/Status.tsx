@@ -38,6 +38,53 @@ export function Gagal({ pesan, coba }: { pesan: string; coba?: () => void }) {
   );
 }
 
+/**
+ * Penanda "angka di layar belum sesuai label periode".
+ *
+ * `useData` sengaja menahan data LAMA selama permintaan baru berjalan, dan
+ * alasannya benar: mengosongkannya membuat seluruh halaman berkedip jadi pemuat
+ * setiap kali rentang digeser satu hari. Tapi tanpa penanda, akibatnya adalah
+ * layar yang utuh dan keliru — label periode sudah berganti sementara tiap
+ * angka di bawahnya masih milik periode sebelumnya, tanpa apa pun yang
+ * memberitahu.
+ *
+ * Jadi selama penyegaran, area angka diredupkan DAN dikunci dari interaksi.
+ * Meredupkan saja tidak cukup: angka yang sudah diketahui usang tidak boleh
+ * bisa diklik, disalin lewat paginasi, atau diekspor seolah-olah masih berlaku.
+ *
+ * Peredupan tidak ikut tercetak — lembar cetak selalu berisi data yang sudah
+ * tiba, karena dialog cetak baru terbuka setelah render.
+ */
+export function AreaData({
+  menyegarkan,
+  children,
+}: {
+  menyegarkan: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative" aria-busy={menyegarkan}>
+      {menyegarkan ? (
+        <div className="no-print pointer-events-none sticky top-[76px] z-30 flex justify-center">
+          <span className="border-line text-ink-2 flex items-center gap-2 rounded-full border bg-white px-3.5 py-1.5 text-xs font-semibold shadow-[0_2px_8px_rgba(16,24,40,.12)]">
+            <span className="border-line border-t-brand h-3.5 w-3.5 animate-spin rounded-full border-2" />
+            Memperbarui angka ke periode baru…
+          </span>
+        </div>
+      ) : null}
+      <div
+        className={
+          menyegarkan
+            ? "pointer-events-none opacity-40 transition-opacity print:opacity-100"
+            : "transition-opacity"
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function Kosong({ children }: { children: ReactNode }) {
   return (
     <div className="text-ink-3 px-4 py-14 text-center text-sm">{children}</div>

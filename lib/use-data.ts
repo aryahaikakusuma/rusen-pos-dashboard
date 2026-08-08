@@ -31,7 +31,22 @@ import { useCallback, useEffect, useState } from "react";
 export function useData<T>(
   ambil: () => Promise<T>,
   deps: unknown[]
-): { data: T | null; memuat: boolean; galat: string | null; muatUlang: () => void } {
+): {
+  data: T | null;
+  memuat: boolean;
+  galat: string | null;
+  muatUlang: () => void;
+  /**
+   * Kapan data yang SEDANG dikembalikan tiba, sebagai epoch milidetik; `null`
+   * sebelum ada apa pun.
+   *
+   * Sengaja mengikuti data, bukan permintaan: selama penyegaran ia tetap
+   * menunjuk waktu tibanya angka lama yang masih terpampang. Memajukannya saat
+   * permintaan baru berangkat akan membuat penanda waktu mengklaim kesegaran
+   * yang belum ada di layar — persis kebohongan yang ditutup Tahap 1.1.
+   */
+  pada: number | null;
+} {
   const [tanda, setTanda] = useState(0);
   const kunci = `${tanda}|${JSON.stringify(deps)}`;
 
@@ -39,6 +54,7 @@ export function useData<T>(
     kunci: string;
     data: T | null;
     galat: string | null;
+    pada: number;
   } | null>(null);
 
   const muatUlang = useCallback(() => setTanda((n) => n + 1), []);
@@ -48,7 +64,7 @@ export function useData<T>(
 
     ambil()
       .then((data) => {
-        if (!batal) setHasil({ kunci, data, galat: null });
+        if (!batal) setHasil({ kunci, data, galat: null, pada: Date.now() });
       })
       .catch((error: unknown) => {
         if (batal) return;
@@ -56,6 +72,7 @@ export function useData<T>(
           kunci,
           data: null,
           galat: error instanceof Error ? error.message : "Gagal memuat data.",
+          pada: Date.now(),
         });
       });
 
@@ -75,5 +92,6 @@ export function useData<T>(
     // Galat dari permintaan lama tidak boleh menempel pada rentang baru.
     galat: terkini ? (hasil?.galat ?? null) : null,
     muatUlang,
+    pada: hasil?.data ? hasil.pada : null,
   };
 }

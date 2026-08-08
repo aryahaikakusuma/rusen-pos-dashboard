@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { Periode } from "@/lib/kontrak";
 import {
+  akhirBulan,
+  awalBulan,
+  awalPekan,
+  geserBulan,
   geserHari,
   hariIniWib,
   jumlahHari,
@@ -41,27 +45,13 @@ interface Preset {
   hitung: (hariIni: string) => Periode;
 }
 
-/** Tanggal 1 pada bulan yang memuat `tanggal`. */
-const awalBulan = (tanggal: string) => `${tanggal.slice(0, 8)}01`;
-
-/** Tanggal terakhir bulan ke-`geser` relatif terhadap bulan `tanggal`. */
-function akhirBulan(tanggal: string, geser = 0): string {
-  const [y, m] = tanggal.split("-").map(Number);
-  const akhir = new Date(Date.UTC(y, m + geser, 0));
-  return akhir.toISOString().slice(0, 10);
-}
-
-function geserBulan(tanggal: string, jumlah: number): string {
-  const [y, m] = tanggal.split("-").map(Number);
-  const dasar = new Date(Date.UTC(y, m - 1 + jumlah, 1));
-  return dasar.toISOString().slice(0, 10);
-}
-
-/** Hari Minggu pekan yang memuat `tanggal` — pekan Indonesia dimulai Minggu. */
-function awalPekan(tanggal: string): string {
-  const hari = new Date(`${tanggal}T00:00:00Z`).getUTCDay();
-  return geserHari(tanggal, -hari);
-}
+/**
+ * `awalBulan`, `akhirBulan`, `geserBulan`, dan `awalPekan` dulu tinggal di
+ * berkas ini. Mereka pindah ke `lib/periode.ts` saat kontrol granularitas
+ * Harian/Mingguan/Bulanan dibangun, karena kontrol itu butuh aritmetika yang
+ * PERSIS sama — dua salinan berarti "Minggu Lalu" di preset dan panah mundur di
+ * granularitas mingguan bisa mendarat di rentang yang berbeda.
+ */
 
 /** Tidak pernah melewati hari ini. Lihat catatan 2 di kepala berkas. */
 const sampaiHariIni = (batas: string, hariIni: string) =>
@@ -161,12 +151,26 @@ function kisiBulan(patokan: string): (string | null)[] {
   return sel;
 }
 
+/**
+ * `pemicu` menggantikan tombol bawaan tanpa menyentuh panelnya.
+ *
+ * Tahap 2 menaruh label rentang di antara dua panah di dalam kartu konten, dan
+ * label itulah yang membuka kalender. Yang dibutuhkan hanya pemicunya yang
+ * berbeda — preset, kisi kalender, aturan "tidak pernah ke masa depan", dan
+ * alur klik-dua-kali di bawah ini tetap satu-satunya salinan yang ada. Menulis
+ * pemilih kedua berarti dua definisi "rentang bebas", dan yang satu akan
+ * ketinggalan setiap kali yang lain diperbaiki.
+ */
 export default function RentangTanggal({
   periode,
   onPilih,
+  pemicu,
+  arah = "kanan",
 }: {
   periode: Periode;
   onPilih: (periode: Periode) => void;
+  pemicu?: (buka: () => void, terbuka: boolean) => ReactNode;
+  arah?: "kiri" | "kanan";
 }) {
   const [buka, setBuka] = useState(false);
   const [dari, setDari] = useState(periode.dari);
@@ -237,23 +241,31 @@ export default function RentangTanggal({
 
   return (
     <div className="relative" ref={wadah}>
-      <button
-        type="button"
-        onClick={() => (buka ? setBuka(false) : bukaPanel())}
-        aria-expanded={buka}
-        className="border-line text-ink-2 hover:border-brand flex cursor-pointer items-center gap-2.5 rounded-[10px] border bg-white px-3.5 py-2.5 text-sm font-semibold transition-colors"
-      >
-        <span className="text-brand" aria-hidden="true">
-          📅
-        </span>
-        <span>{presetAktif ? presetAktif.label : labelPeriode(periode)}</span>
-        <span className="text-ink-3 text-xs" aria-hidden="true">
-          ▾
-        </span>
-      </button>
+      {pemicu ? (
+        pemicu(() => (buka ? setBuka(false) : bukaPanel()), buka)
+      ) : (
+        <button
+          type="button"
+          onClick={() => (buka ? setBuka(false) : bukaPanel())}
+          aria-expanded={buka}
+          className="border-line text-ink-2 hover:border-brand flex cursor-pointer items-center gap-2.5 rounded-[10px] border bg-white px-3.5 py-2.5 text-sm font-semibold transition-colors"
+        >
+          <span className="text-brand" aria-hidden="true">
+            📅
+          </span>
+          <span>{presetAktif ? presetAktif.label : labelPeriode(periode)}</span>
+          <span className="text-ink-3 text-xs" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+      )}
 
       {buka ? (
-        <div className="border-line absolute top-full right-0 z-60 mt-2 w-[min(92vw,780px)] overflow-hidden rounded-2xl border bg-white shadow-[0_24px_64px_rgba(16,24,40,.18)]">
+        <div
+          className={`border-line absolute top-full z-60 mt-2 w-[min(92vw,780px)] overflow-hidden rounded-2xl border bg-white shadow-[0_24px_64px_rgba(16,24,40,.18)] ${
+            arah === "kiri" ? "left-0" : "right-0"
+          }`}
+        >
           <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr]">
             <div className="border-line flex max-h-[420px] flex-row flex-wrap gap-0.5 overflow-auto border-b p-2 lg:flex-col lg:flex-nowrap lg:border-r lg:border-b-0">
               {PRESET.map((preset) => {
