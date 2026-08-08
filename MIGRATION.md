@@ -49,9 +49,10 @@ which is what the dashboard points at. Read the Tahap 2 section before touching 
 guarded by `jaga()` rather than by its own check, and `dasar_pbjt` must not be displayed on
 exempt orders. `npm run periksa:laporan` is the gate. A display round on 8 August 2026 (Tahap 2.1)
 moved the range picker into the pages, folded Cetak and Unduh Excel into that same bar, renamed
-"Penjualan Harian" to "Penjualan per Periode", and added the multi-series chart there. It also
-left `0028` on **both** databases with **no caller at all** — see the end of that section before
-assuming a product chart exists.
+"Penjualan Harian" to "Penjualan per Periode", and added the multi-series chart there. Tahap 2.2
+then gave `0028` its caller: the per-product trend chart on Laporan Produk. Read its section
+before adding any series to that chart — the 32-series ceiling is a data-integrity limit, not a
+readability one.
 
 **Where to pick up, in the order that makes sense:**
 
@@ -1995,21 +1996,83 @@ that is never coming. The condition is `baris.length < 2`, not the granularity b
 picked from the calendar is also one point and lights up no button at all. The KPI cards and the
 table stay fully populated; only the shape of the trend does not apply.
 
-**`0028_laporan_produk_harian.sql` is applied to both databases and has no caller.** It gives
-Laporan Produk the time axis `laporan_produk` lacks — one row per variant per WIB date, empty
-dates filled with zero, `p_kode` empty meaning the top `p_teratas` (default 5) by period revenue.
-It is a *new function* rather than extra parameters on `laporan_produk`, because `create or
-replace` with a new signature does not replace anything in Postgres: it creates an overload, and
-old callers stay silently bound to the old one. Grep confirms nothing in `app/`, `lib/`,
-`components/`, or `scripts/` calls it yet. So: it is real, it is deployed, it is verified by
-nothing, and the product chart it was written for **does not exist**. Whoever builds that chart
-should run `periksa:laporan`-style assertions against it first — in particular that its revenue,
-summed over the period, equals `laporan_produk` for the same variants, since both are gross and
-neither subtracts refunds.
+**`0028_laporan_produk_harian.sql` is applied to both databases.** It gives Laporan Produk the
+time axis `laporan_produk` lacks — one row per variant per WIB date, empty dates filled with zero,
+`p_kode` empty meaning the top `p_teratas` (default 5) by period revenue. It is a *new function*
+rather than extra parameters on `laporan_produk`, because `create or replace` with a new signature
+does not replace anything in Postgres: it creates an overload, and old callers stay silently bound
+to the old one. It had no caller until Tahap 2.2 below.
 
 **`outputs/` is gitignored.** It holds working notes from audit and revision passes — process
 records, not source. They are useful while a change is in flight and misleading afterwards,
 because nothing keeps them in step with the code.
+
+## Dashboard Tahap 2.2 — the per-product trend chart, and the 1000-row cliff ✅ (web only)
+
+`0028` finally has its caller: **Tren Penjualan per Produk** on `/dashboard/laporan/produk`, a
+multi-series line chart above the Pareto card. New: `app/api/laporan/produk-harian/route.ts`,
+`laporanProdukHarian()` in `lib/laporan.ts`, `components/dashboard/TrenProduk.tsx`.
+
+**The 32-series ceiling is a data-integrity limit, not a readability one, and this is the whole
+point of the feature's design.** PostgREST truncates a response at 1000 rows and says *nothing*:
+status 206, no error field, no exception in supabase-js — just a shorter array. The grain here is
+series × dates, so 32 series × 31 days = 992 rows sits one notch under the cliff. Measured against
+the real August data, a single unchunked request for 40 codes returned:
+
+```
+status         : 206
+Content-Range  : 0-999/1240
+baris diterima : 1000
+```
+
+A chart drawn from that is the dangerous failure: lines that simply stop partway through the month,
+which reads as "this product stopped selling", not as "the fetch was cut off". Three defences, all
+of which are load-bearing:
+
+1. **Requests are split 25 codes at a time** (`SEPOTONG_KODE`), so no single response comes close
+   to 1000 rows. 25 × 31 = 775.
+2. **Every response is checked against its own `Content-Range`.** `count: "exact"` asks for the
+   header, and `baris.length < count` is raised as a visible error. A missing header is *also* an
+   error rather than a pass — without it, truncation cannot be detected at all, and "we couldn't
+   check" must not look like "we checked and it was fine".
+3. **The 32 ceiling is enforced in the route, not just the picker.** A disabled button does not
+   disable the URL behind it; 33 codes gets a 400 with a message that names the number.
+
+**Splitting the request breaks the ordering contract, so ordering is redone.** `0028` returns
+series ordered by period revenue, but that ordering only holds *within* one response — concatenate
+two chunks and code #26 lands above code #2, scrambling legend colours. `laporanProdukHarian()`
+re-sorts by summed revenue. This is not client-side ranking of the kind `0028` decision 3 forbids:
+*which* products appear is still entirely Postgres's choice; only the legend order is arranged here.
+
+**An empty `kode` list means "you pick", not "nothing selected".** The page opens with `kode: []`,
+the route omits `p_kode`, and Postgres returns its default top 5 by revenue. The alternative —
+reading the top 5 off the table already on screen — needs the ranking from one response and the
+series from another, and during a refresh those two can come from different periods. The response
+carries `bawaan: true` so the card can say which mode it is in without a second piece of state.
+Consequence: there is no "please choose a product first" state; the chart has content before anyone
+touches it.
+
+**The last chip cannot be closed.** An empty list means "top 5" to the server, so closing the final
+chip would make five series reappear — the exact opposite of what closing it asks for. The × is
+disabled at one series, and a "Kembali ke 5 teratas" action gives the way back explicitly.
+
+**The Chart.js legend is off; the chips are the legend.** They carry the series colour and are the
+only thing that can switch a series off, so a second legend beside them would only raise the
+question of which one is authoritative. Colours: four fixed brand colours, then hue rotation by
+137.5° for the rest — a fixed list of 32 is easier to read and easier to run out of silently,
+drawing two products in the same colour.
+
+**An empty period says so in words.** Zero rows renders an explanation naming the date range, not a
+blank canvas — the same reasoning as "Tidak berlaku untuk harian" one section above. A fetch
+failure gets its own distinct message plus a retry, because a truncation error and a quiet month
+must never look alike.
+
+**The gate.** `periksa:laporan` now runs 38 assertions, up from 25. The new ones sum every day of a
+series and compare it to that variant's row in the Laporan Produk table — revenue *and* units, for
+the top three variants — plus one point per date in the range (catching dropped empty days), the
+default being exactly the table's top 5 in the same order, and 33 codes being refused. Against
+1–31 August 2026: 605 paid orders, gross Rp 36.291.000, all 38 matching. Separately verified that
+32 real codes across two chunks return all 992 rows with every variant total matching the table.
 
 ## Step 8 — Device and store builds
 

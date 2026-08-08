@@ -131,6 +131,42 @@ const P = produk.baris.reduce(
   { omzet: 0, terjual: 0, persen: 0 }
 );
 
+/* ------------------------------- 3b. Tren produk per tanggal (grafik, 0028) */
+//
+// Grain berbeda lagi: satu baris per varian PER TANGGAL. Deret ini yang
+// digambar grafik di halaman Laporan Produk, dan ia harus menjumlah ke angka
+// varian yang sama di tabel halaman itu — kalau tidak, garis dan baris tabel
+// tepat di bawahnya membicarakan produk yang sama dengan dua angka berbeda.
+//
+// Bawaan tanpa daftar kode diuji lebih dulu, karena itu yang dilihat orang saat
+// halaman baru dibuka: server harus mengembalikan LIMA teratas menurut omzet,
+// dan lima itu harus sama persis dengan lima teratas tabel.
+const trenBawaan = await json(`/api/laporan/produk-harian?${rentang}`);
+
+const tigaTeratas = [...produk.baris].sort((a, b) => b.omzet - a.omzet).slice(0, 3);
+const tren = tigaTeratas.length
+  ? await json(
+      `/api/laporan/produk-harian?${rentang}&kode=${encodeURIComponent(
+        tigaTeratas.map((b) => b.product_code).join(",")
+      )}`
+    )
+  : { baris: [], kode: [] };
+
+const jumlahSeri = (kode) =>
+  tren.baris
+    .filter((b) => b.product_code === kode)
+    .reduce((s, b) => s + b.omzet, 0);
+const jumlahUnit = (kode) =>
+  tren.baris
+    .filter((b) => b.product_code === kode)
+    .reduce((s, b) => s + b.terjual, 0);
+
+// Tiap seri harus punya satu titik per tanggal dalam rentang, termasuk hari
+// sepi. Deret yang lebih pendek berarti tanggal kosong hilang, dan garisnya
+// akan melompat dari tanggal 3 ke tanggal 5 sambil tetap terlihat wajar.
+const hariRentang =
+  Math.round((Date.parse(`${SAMPAI}T00:00:00Z`) - Date.parse(`${DARI}T00:00:00Z`)) / 86400000) + 1;
+
 /* ----------------------------------------------------------- 4. Berkas xlsx */
 async function unduh(jenis) {
   const r = await fetch(`${ASAL}/api/export/${jenis}?${rentang}`, { headers: kepala });
@@ -205,6 +241,40 @@ cek("Harian.bebas_order = Detail(exempt).subtotal", H.bebas, D.bebas);
 cek("Harian.jumlah_order = baris Detail terambil", H.order, detail.length);
 cek("Harian.jumlah_order = total_baris Detail", H.order, totalBaris);
 cek("Produk.terjual = xlsx Produk", P.terjual, X.produk.terjual);
+
+// Gerbang grafik tren: satu seri dijumlahkan seluruh harinya harus sama PERSIS
+// dengan omzet varian itu di tabel Laporan Produk. Diulang untuk tiga varian
+// teratas, karena satu kecocokan bisa saja kebetulan.
+for (const b of tigaTeratas) {
+  cek(`Tren[${b.product_code}] omzet = tabel Produk`, jumlahSeri(b.product_code), b.omzet);
+  cek(`Tren[${b.product_code}] terjual = tabel Produk`, jumlahUnit(b.product_code), b.terjual);
+  cek(
+    `Tren[${b.product_code}] titik = hari rentang`,
+    tren.baris.filter((r) => r.product_code === b.product_code).length,
+    hariRentang
+  );
+}
+
+// Bawaan tanpa daftar kode: lima teratas, dan lima yang sama dengan tabel.
+cek("Tren bawaan = 5 seri", trenBawaan.kode.length, Math.min(5, produk.baris.length));
+cek("Tren bawaan ditandai bawaan", trenBawaan.bawaan, true);
+cek(
+  "Tren bawaan = 5 teratas tabel",
+  trenBawaan.kode.join(","),
+  [...produk.baris]
+    .sort((a, b) => b.omzet - a.omzet || b.terjual - a.terjual || a.product_code.localeCompare(b.product_code))
+    .slice(0, 5)
+    .map((b) => b.product_code)
+    .join(",")
+);
+
+// Batas keras 32 seri ditegakkan route, bukan cuma tombol. Diuji dengan kode
+// palsu: yang diperiksa penolakannya, bukan datanya.
+const lebih = await fetch(
+  `${ASAL}/api/laporan/produk-harian?${rentang}&kode=${Array.from({ length: 33 }, (_, i) => `X${i}`).join(",")}`,
+  { headers: kepala }
+);
+cek("33 seri ditolak 400", lebih.status, 400);
 
 // Berkas harus dikirim sebagai lampiran spreadsheet, bukan ditampilkan sebagai
 // teks acak di tab browser.

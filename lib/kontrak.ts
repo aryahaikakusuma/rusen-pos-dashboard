@@ -66,6 +66,45 @@ export interface BarisProduk {
   kontribusi_persen: number | null;
 }
 
+/** Satu baris per varian per tanggal WIB — keluaran `laporan_produk_harian` (0028). */
+export interface BarisProdukHarian {
+  product_code: string;
+  nama_produk: string;
+  /** `YYYY-MM-DD`, WIB. Tanggal tanpa penjualan tetap muncul, bernilai nol. */
+  tanggal: string;
+  terjual: number;
+  /** sum(order_items.subtotal), pra-pajak, KOTOR — refund tidak dikurangkan. */
+  omzet: number;
+}
+
+/**
+ * Batas keras jumlah seri pada grafik tren produk.
+ *
+ * BUKAN angka selera. PostgREST memotong balasan di 1000 baris tanpa galat apa
+ * pun — tanpa header aneh, tanpa status berbeda, hanya array yang lebih pendek.
+ * Grain `laporan_produk_harian` adalah seri × tanggal, jadi 32 seri pada bulan
+ * 31 hari sudah 992 baris dan tinggal sejengkal dari pemotongan itu. Melewati
+ * batas berarti grafik menggambar garis dari data terpotong, dan garis yang
+ * putus di tanggal 28 terbaca sebagai "produk ini berhenti laku", bukan sebagai
+ * kegagalan pengambilan data.
+ *
+ * Dua pertahanan berlapis menjaganya: permintaan dipecah per `SEPOTONG` kode
+ * sehingga tiap balasan jauh di bawah 1000 baris, DAN tiap balasan dicocokkan
+ * dengan Content-Range-nya sendiri. Batas ini adalah pertahanan ketiga, yang
+ * membuat jumlah serinya sendiri tidak pernah tumbuh tanpa batas.
+ */
+export const MAKS_SERI_PRODUK = 32;
+
+/**
+ * Berapa kode produk per permintaan ke Postgres.
+ *
+ * 25 kode × 31 hari = 775 baris, dan angka itu bukan hitungan di atas kertas:
+ * ia ukuran yang sudah terbukti bekerja saat 0028 divalidasi terhadap data
+ * Agustus. Batas 32 seri di atas tetap ditegakkan terpisah — pemecahan ini
+ * menjaga tiap BALASAN kecil, bukan menjaga grafiknya tetap terbaca.
+ */
+export const SEPOTONG_KODE = 25;
+
 export interface Kategori {
   id: string;
   code: string;
@@ -117,6 +156,23 @@ export interface BalasanProduk {
   periode: Periode;
   outlet: string;
   baris: BarisProduk[];
+}
+
+export interface BalasanProdukHarian {
+  periode: Periode;
+  outlet: string;
+  /**
+   * Kode yang benar-benar terwakili di `baris`, urut menurut omzet periode.
+   *
+   * Dikembalikan karena permintaan tanpa kode dijawab dengan N teratas yang
+   * dipilih Postgres — tanpa kolom ini klien tidak punya cara tahu produk mana
+   * yang datang selain menebaknya ulang dari baris, dan menebak ulang berarti
+   * memeringkat di klien, persis yang dihindari 0028 keputusan 3.
+   */
+  kode: string[];
+  /** `true` saat daftar di atas dipilih Postgres, bukan diminta klien. */
+  bawaan: boolean;
+  baris: BarisProdukHarian[];
 }
 
 export interface BalasanKatalog {

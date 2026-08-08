@@ -13,6 +13,7 @@ import {
 } from "@/components/dashboard/Kartu";
 import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
+import TrenProduk from "@/components/dashboard/TrenProduk";
 import { Api } from "@/lib/api-klien";
 import { angka, bagi, persen, rupiah, rupiahRingkas } from "@/lib/format";
 import { useData } from "@/lib/use-data";
@@ -301,6 +302,12 @@ export default function LaporanProdukPage() {
           />
         </BarisKpi>
       </div>
+
+      {/* Sumbu tanggal, dari `0028` — satu-satunya blok di halaman ini yang
+          punya waktu. Sisanya (Pareto, kategori, tabel) berasal dari
+          `laporan_produk`, yang mengagregasi seluruh periode jadi satu baris per
+          varian dan karena itu tidak bisa menjawab "kapan". */}
+      <TrenProduk periode={periode} pilihan={semua} />
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Kartu>

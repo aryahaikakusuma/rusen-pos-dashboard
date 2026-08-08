@@ -3,6 +3,7 @@ import type {
   BalasanHarian,
   BalasanKatalog,
   BalasanProduk,
+  BalasanProdukHarian,
   Periode,
   Produk,
 } from "./kontrak";
@@ -86,6 +87,15 @@ export const Api = {
 
   produkLaporan(periode: Periode): Promise<BalasanProduk> {
     return ambil(`/api/laporan/produk?${rentang(periode)}`);
+  },
+
+  /**
+   * Deret harian per produk. `kode` kosong berarti "pilihkan lima teratas" —
+   * yang memilih adalah Postgres, bukan halaman ini.
+   */
+  produkHarian(periode: Periode, kode: string[]): Promise<BalasanProdukHarian> {
+    const daftar = kode.length ? `&kode=${encodeURIComponent(kode.join(","))}` : "";
+    return ambil(`/api/laporan/produk-harian?${rentang(periode)}${daftar}`);
   },
 
   katalog(): Promise<BalasanKatalog> {
