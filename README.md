@@ -1,4 +1,4 @@
-# Rusen Kopitiam POS
+# Rusen Kopitiam POS — rusen-pos-dashboard
 
 Point-of-sale for a single-outlet family coffee shop. Two applications in one repo:
 
