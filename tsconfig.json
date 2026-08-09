@@ -35,5 +35,9 @@
   // sini. Memasukkannya membuat `npm run typecheck` selalu merah karena
   // kesalahan yang bukan kesalahan — dan pemeriksaan yang selalu merah sama
   // saja dengan tidak ada pemeriksaan.
-  "exclude": ["node_modules", "supabase/functions"]
+  //
+  // mobile/ adalah proyek Expo terpisah dengan tsconfig dan node_modules-nya
+  // sendiri (mis. expo-font). `npm install` di root tidak memasangnya, jadi
+  // build ini gagal kalau tsc ikut memeriksa file di dalamnya.
+  "exclude": ["node_modules", "supabase/functions", "mobile"]
 }
