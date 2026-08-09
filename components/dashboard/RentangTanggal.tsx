@@ -48,9 +48,15 @@ interface Preset {
 /**
  * `awalBulan`, `akhirBulan`, `geserBulan`, dan `awalPekan` dulu tinggal di
  * berkas ini. Mereka pindah ke `lib/periode.ts` saat kontrol granularitas
- * Harian/Mingguan/Bulanan dibangun, karena kontrol itu butuh aritmetika yang
- * PERSIS sama — dua salinan berarti "Minggu Lalu" di preset dan panah mundur di
- * granularitas mingguan bisa mendarat di rentang yang berbeda.
+ * Harian/Mingguan/Bulanan dibangun, supaya "Bulan Lalu" di preset dan panah
+ * mundur di granularitas bulanan memakai aritmetika bulan yang persis sama.
+ *
+ * "Minggu Ini"/"Minggu Lalu" DI SINI SENGAJA BUKAN LAGI DEFINISI YANG SAMA
+ * DENGAN TOMBOL "Mingguan" di `KontrolPeriode`. Preset ini tetap pekan
+ * kalender (Minggu–Sabtu, lewat `awalPekan`) karena namanya menjanjikan itu;
+ * tombol "Mingguan" adalah jendela bergulir 7 hari (lihat `rentangGranular`
+ * di `lib/periode.ts`) supaya pekan yang baru mulai hari Minggu tidak
+ * terlihat sama seperti "Harian".
  */
 
 /** Tidak pernah melewati hari ini. Lihat catatan 2 di kepala berkas. */

@@ -35,9 +35,17 @@ import RentangTanggal from "./RentangTanggal";
  * ketahuan artinya setelah panah ditekan. Label "Harian" harus menggambarkan
  * apa yang SEDANG tampil, bukan apa yang akan terjadi nanti.
  *
- * Keadaan aktifnya diturunkan dari rentang (`granularitas()`), tidak disimpan
- * terpisah — memilih 3–17 Agustus lewat kalender mematikan ketiganya, dan itu
- * jujur: rentang itu memang bukan hari, pekan, atau bulan.
+ * Keadaan aktifnya diturunkan dari rentang (`granularitas()`), DIBANTU hint
+ * `g` di query string yang mengingat tombol mana yang barusan ditekan — lihat
+ * catatan panjang di `granularitas()` (`lib/periode.ts`) untuk alasannya:
+ * pada tanggal 1 atau tanggal 7 bulan berjalan, "Bulanan" menghasilkan rentang
+ * yang identik dengan "Harian" atau "Mingguan", jadi bentuk rentang saja
+ * tidak cukup untuk membedakan keduanya. Rentang tetap sumber kebenaran untuk
+ * SAH-TIDAKNYA granularitas; `g` cuma
+ * memilih di antara pembacaan yang sama-sama sah. Memilih 3–17 Agustus lewat
+ * kalender tetap mematikan ketiganya — `RentangTanggal` memanggil `setPeriode`
+ * tanpa hint, yang menghapus `g` lama, dan rentang itu memang bukan hari,
+ * pekan, atau bulan apa pun.
  *
  * Label di antara dua panah membuka `RentangTanggal` yang sudah ada, lengkap
  * dengan seluruh presetnya. Ia dipakai ulang lewat prop `pemicu`, bukan ditulis
@@ -49,7 +57,7 @@ export default function KontrolPeriode({
   /** Kapan angka yang sedang tampil tiba. `null` selama pengambilan pertama. */
   waktuData: number | null;
 }) {
-  const { periode, setPeriode } = usePeriode();
+  const { periode, hintGranularitas, setPeriode } = usePeriode();
   const pathname = usePathname();
 
   /**
@@ -70,8 +78,8 @@ export default function KontrolPeriode({
   // malam, dan itu perubahan yang tidak pernah diminta siapa pun.
   const hariIni = useMemo(() => hariIniWib(), []);
 
-  const aktif = granularitas(periode, hariIni);
-  const maju = bisaMaju(periode, hariIni);
+  const aktif = granularitas(periode, hariIni, hintGranularitas);
+  const maju = bisaMaju(periode, hariIni, aktif);
 
   return (
     <div className="no-print border-line mb-5 rounded-2xl border bg-white px-4 py-3">
@@ -87,7 +95,7 @@ export default function KontrolPeriode({
               type="button"
               aria-pressed={aktif === id}
               onClick={() =>
-                setPeriode(rentangGranular(id, periode.sampai, hariIni))
+                setPeriode(rentangGranular(id, periode.sampai, hariIni), id)
               }
               className={`cursor-pointer rounded-lg px-3.5 py-2 text-[13px] transition-colors ${
                 aktif === id
@@ -104,7 +112,9 @@ export default function KontrolPeriode({
           <Panah
             arah={-1}
             label="Periode sebelumnya"
-            onKlik={() => setPeriode(geserPeriode(periode, -1, hariIni))}
+            onKlik={() =>
+              setPeriode(geserPeriode(periode, -1, hariIni, aktif), aktif)
+            }
           />
 
           <RentangTanggal
@@ -138,7 +148,9 @@ export default function KontrolPeriode({
             arah={1}
             label="Periode berikutnya"
             mati={!maju}
-            onKlik={() => setPeriode(geserPeriode(periode, 1, hariIni))}
+            onKlik={() =>
+              setPeriode(geserPeriode(periode, 1, hariIni, aktif), aktif)
+            }
           />
         </div>
 

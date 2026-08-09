@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 
 import type { Periode } from "./kontrak";
-import { hariIniWib } from "./periode";
+import { GRANULARITAS, hariIniWib, type Granularitas } from "./periode";
 
 /**
  * Periode aktif tinggal di URL, bukan di state React.
@@ -29,7 +29,16 @@ export function periodeBawaan(): Periode {
 
 export function usePeriode(): {
   periode: Periode;
-  setPeriode: (periode: Periode) => void;
+  /**
+   * Granularitas tombol yang barusan ditekan, atau `null` kalau rentang saat
+   * ini berasal dari kalender/preset bebas, atau dari tautan yang dibagikan
+   * tanpa `g`. Dibaca dari query string, bukan dari bentuk rentang — lihat
+   * catatan panjang di `granularitas()` di `lib/periode.ts` untuk alasannya:
+   * rentang saja tidak selalu cukup untuk membedakan "Harian" dari "Mingguan"
+   * pada hari Minggu.
+   */
+  hintGranularitas: Granularitas | null;
+  setPeriode: (periode: Periode, granularitas?: Granularitas | null) => void;
 } {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,6 +46,7 @@ export function usePeriode(): {
 
   const dari = params.get("dari");
   const sampai = params.get("sampai");
+  const g = params.get("g");
 
   const periode = useMemo<Periode>(() => {
     // Query string yang cacat diperlakukan sebagai tidak ada, bukan sebagai
@@ -48,8 +58,13 @@ export function usePeriode(): {
     return periodeBawaan();
   }, [dari, sampai]);
 
+  const hintGranularitas = useMemo<Granularitas | null>(() => {
+    const ditemukan = GRANULARITAS.find((x) => x.id === g);
+    return ditemukan ? ditemukan.id : null;
+  }, [g]);
+
   const setPeriode = useCallback(
-    (baru: Periode) => {
+    (baru: Periode, granularitas?: Granularitas | null) => {
       const berikut = new URLSearchParams(params);
       berikut.set("dari", baru.dari);
       berikut.set("sampai", baru.sampai);
@@ -58,10 +73,17 @@ export function usePeriode(): {
       // ada di periode baru, dan hasilnya tabel kosong tanpa sebab yang terlihat.
       berikut.delete("halaman");
 
+      // Pemanggil yang tidak menyebut granularitas (kalender, preset bebas)
+      // menghapus `g` lama secara diam-diam — kalau tidak, memilih 3–17
+      // Agustus lewat kalender setelah menekan "Bulanan" akan membawa hint
+      // "bulanan" yang sudah tidak berlaku ke rentang bebas berikutnya.
+      if (granularitas) berikut.set("g", granularitas);
+      else berikut.delete("g");
+
       router.push(`${pathname}?${berikut.toString()}`);
     },
     [params, pathname, router]
   );
 
-  return { periode, setPeriode };
+  return { periode, hintGranularitas, setPeriode };
 }

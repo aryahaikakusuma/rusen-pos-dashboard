@@ -98,42 +98,54 @@ export default function KelolaProdukPage() {
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <input
-          value={cari}
-          onChange={(e) => setCari(e.target.value)}
-          placeholder="Cari nama atau kode produk…"
-          className="border-line focus:border-brand min-w-[240px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
-        />
-        <select
-          value={filterKategori}
-          onChange={(e) => setFilterKategori(e.target.value)}
-          className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
-        >
-          <option value="">Semua kategori</option>
-          {kategori.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.name}
-            </option>
-          ))}
-        </select>
-        <label className="border-line flex cursor-pointer items-center gap-2 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium">
+      {/*
+       * SATU BARIS, filter kiri dan tombol utama kanan — sama seperti pola di
+       * `KontrolPeriode`. Dulu penyekat `flex-1` di antara keduanya memaksa
+       * "+ Tambah Produk" ke ujung kanan, dan pada area konten yang lebih
+       * sempit dari jumlah lebar keempat kontrol, itu justru membuatnya jatuh
+       * SENDIRIAN ke baris kedua — flex-wrap membungkus utuh satu elemen yang
+       * tidak muat, bukan menyusun ulang sisanya. Mengelompokkan filter jadi
+       * satu unit `flex-wrap` sendiri berarti filter yang membungkus duluan
+       * saat sempit, dan tombolnya tetap searah dengan kelompok itu alih-alih
+       * terdampar jauh di kanan.
+       */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <input
-            type="checkbox"
-            checked={tampilkanNonaktif}
-            onChange={(e) => setTampilkanNonaktif(e.target.checked)}
-            className="accent-brand"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama atau kode produk…"
+            className="border-line focus:border-brand min-w-[200px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
           />
-          Tampilkan yang nonaktif
-        </label>
-        <span className="flex-1" />
+          <select
+            value={filterKategori}
+            onChange={(e) => setFilterKategori(e.target.value)}
+            className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
+          >
+            <option value="">Semua kategori</option>
+            {kategori.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.name}
+              </option>
+            ))}
+          </select>
+          <label className="border-line flex cursor-pointer items-center gap-2 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={tampilkanNonaktif}
+              onChange={(e) => setTampilkanNonaktif(e.target.checked)}
+              className="accent-brand"
+            />
+            Tampilkan yang nonaktif
+          </label>
+        </div>
         <button
           type="button"
           onClick={() => {
             setSedangDiubah(null);
             setFormBuka(true);
           }}
-          className="bg-brand hover:bg-brand-dark cursor-pointer rounded-[10px] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors"
+          className="bg-brand hover:bg-brand-dark shrink-0 cursor-pointer rounded-[10px] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors"
         >
           ＋ Tambah Produk
         </button>

@@ -107,6 +107,14 @@ export const GRANULARITAS: { id: Granularitas; label: string }[] = [
  * alasannya sama: fungsi laporan menerbitkan deret tanggal penuh, jadi minggu
  * berjalan yang dibiarkan menjulur ke Sabtu depan menghasilkan hari nol untuk
  * hari yang belum terjadi — dan setiap grafik terjun bebas ke kanan.
+ *
+ * "Mingguan" DI SINI ADALAH JENDELA BERGULIR 7 HARI YANG BERAKHIR DI PATOKAN,
+ * BUKAN PEKAN KALENDER Minggu–Sabtu. Tadinya memakai `awalPekan` (sama dengan
+ * preset "Minggu Ini"), tapi itu berarti pekan berjalan yang baru mulai hari
+ * Minggu cuma berisi satu hari data — menekan "Mingguan" pada hari Minggu
+ * terlihat sama seperti "Harian". `awalPekan` masih dipakai `RentangTanggal`
+ * untuk preset "Minggu Ini"/"Minggu Lalu" yang memang bermaksud pekan kalender
+ * — keduanya sekarang sengaja berbeda konsep, bukan lagi harus sama persis.
  */
 export function rentangGranular(
   granularitas: Granularitas,
@@ -123,10 +131,10 @@ export function rentangGranular(
   const dasar = jangan_ke_depan(patokan, hariIni);
 
   if (granularitas === "harian") return { dari: dasar, sampai: dasar };
+  if (granularitas === "mingguan") return { dari: geserHari(dasar, -6), sampai: dasar };
 
-  const dari = granularitas === "mingguan" ? awalPekan(dasar) : awalBulan(dasar);
-  const penuh =
-    granularitas === "mingguan" ? geserHari(dari, 6) : akhirBulan(dari);
+  const dari = awalBulan(dasar);
+  const penuh = akhirBulan(dari);
   return { dari, sampai: jangan_ke_depan(penuh, hariIni) };
 }
 
@@ -134,21 +142,58 @@ export function rentangGranular(
  * Granularitas yang PERSIS diwakili rentang ini, atau `null` kalau ia rentang
  * bebas.
  *
- * Diturunkan dari rentangnya, tidak disimpan terpisah. Menyimpannya di state
- * atau query string berarti ada dua sumber untuk satu fakta, dan yang satu
- * bisa berbohong: tombol "Bulanan" tetap menyala setelah orang memilih 3–17
- * Agustus lewat kalender.
+ * TERNYATA TIDAK BISA MURNI DITURUNKAN DARI RENTANG SAJA. "Mingguan" sekarang
+ * jendela bergulir 7 hari (lihat `rentangGranular`), jadi ia tidak lagi bisa
+ * bertumpuk dengan "Harian" — tapi "Bulanan" masih bisa bertumpuk dengan
+ * keduanya: bulan berjalan pada tanggal 1 berbentuk PERSIS SAMA dengan
+ * `rentangGranular("harian", ...)`, dan pada hari ke-7 bulan berjalan
+ * (dasarnya belum dipotong hari ini) berbentuk PERSIS SAMA dengan
+ * `rentangGranular("mingguan", ...)` — awal bulan itu jatuh tepat 7 hari
+ * sebelum tanggal 7. Pada hari-hari itu, menekan dua tombol granularitas yang
+ * berbeda menghasilkan rentang yang identik bit demi bit; tidak ada urutan
+ * pemeriksaan yang bisa membedakan keduanya dari rentangnya saja, karena
+ * memang tidak ada bedanya.
  *
- * Satuan berjalan yang terpotong di hari ini tetap dikenali — itu bentuk yang
- * `rentangGranular` hasilkan, jadi ia harus bisa dibaca balik.
+ * `hint` memecahkan itu — `id` tombol yang barusan ditekan, dibawa lewat
+ * parameter `g` di query string (lihat `usePeriode`). Dipakai HANYA kalau ia
+ * masih konsisten dengan rentang yang sedang tampil; rentang tetap sumber
+ * kebenaran untuk sah-tidaknya, `hint` cuma memilih di antara pembacaan yang
+ * sama-sama sah. Itu sebabnya tombol "Bulanan" tetap padam begitu orang
+ * memilih 3–17 Agustus lewat kalender: `hint` lama ("bulanan") tidak lagi
+ * cocok dengan rentang barunya, jadi diabaikan dan jatuh ke penurunan di
+ * bawah.
+ *
+ * Tanpa `hint` — tautan yang dibagikan tanpa `g`, atau pemuatan pertama
+ * sebelum tombol mana pun ditekan — jatuh ke tebakan dari bentuk rentang,
+ * DIPERIKSA DARI YANG TERLUAS (bulanan → mingguan → harian): pilihan yang
+ * lebih luas lebih mungkin disengaja daripada kebetulan sama dengan sehari.
  */
+
+// "Harian" dan "Bulanan" berpatokan di `dari` — `awalBulan(dari)` idempoten
+// karena `dari` sebuah rentang bulanan sudah tanggal 1. "Mingguan" sekarang
+// jendela yang berakhir di patokannya (lihat `rentangGranular`), jadi
+// berpatokan di `dari` di sini SELALU GAGAL cocok kecuali rentangnya
+// kebetulan satu hari — jendela 7 hari yang sungguhan tidak akan pernah
+// terbaca sebagai "Mingguan" lagi. Uji kecocokan harus berpatokan di ujung
+// yang tepat untuk tiap granularitas.
+function cocokGranularitas(id: Granularitas, periode: Periode, hariIni: string): boolean {
+  const patokan = id === "mingguan" ? periode.sampai : periode.dari;
+  const setara = rentangGranular(id, patokan, hariIni);
+  return setara.dari === periode.dari && setara.sampai === periode.sampai;
+}
+
 export function granularitas(
   periode: Periode,
-  hariIni: string
+  hariIni: string,
+  hint?: Granularitas | null
 ): Granularitas | null {
-  for (const { id } of GRANULARITAS) {
-    const setara = rentangGranular(id, periode.dari, hariIni);
-    if (setara.dari === periode.dari && setara.sampai === periode.sampai) {
+  if (hint && cocokGranularitas(hint, periode, hariIni)) {
+    return hint;
+  }
+
+  for (let i = GRANULARITAS.length - 1; i >= 0; i--) {
+    const { id } = GRANULARITAS[i];
+    if (cocokGranularitas(id, periode, hariIni)) {
       return id;
     }
   }
@@ -161,18 +206,30 @@ export function granularitas(
  * Rentang bebas digeser sepanjang dirinya sendiri, konsisten dengan
  * `periodeSebelumnya` — mundur dari 1–8 Agustus mendarat di 24–31 Juli, bukan
  * di bulan Juli utuh.
+ *
+ * `hint` diteruskan ke `granularitas()` untuk alasan yang sama seperti di
+ * sana: tanpanya, menggeser rentang sehari yang sedang aktif sebagai
+ * "Mingguan" pada hari Minggu bisa salah dibaca sebagai "Harian" dan
+ * melangkah sehari alih-alih sepekan.
+ *
+ * Cabang "mingguan" menggeser dari `periode.sampai`, bukan `periode.dari`.
+ * "Mingguan" adalah jendela 7-hari yang berakhir di patokannya (lihat
+ * `rentangGranular`), jadi ujung akhirlah yang jadi jangkar navigasi — geser
+ * dari `dari` akan mendarat di jendela yang tumpang tindih sebagian, bukan
+ * bergeser tepat 7 hari.
  */
 export function geserPeriode(
   periode: Periode,
   arah: -1 | 1,
-  hariIni: string
+  hariIni: string,
+  hint?: Granularitas | null
 ): Periode {
-  const g = granularitas(periode, hariIni);
+  const g = granularitas(periode, hariIni, hint);
   if (g === "harian") {
     return rentangGranular("harian", geserHari(periode.dari, arah), hariIni);
   }
   if (g === "mingguan") {
-    return rentangGranular("mingguan", geserHari(periode.dari, arah * 7), hariIni);
+    return rentangGranular("mingguan", geserHari(periode.sampai, arah * 7), hariIni);
   }
   if (g === "bulanan") {
     return rentangGranular("bulanan", geserBulan(periode.dari, arah), hariIni);
@@ -201,8 +258,12 @@ export function geserPeriode(
  * memendekkan rentangnya diam-diam — panjang rentang adalah yang barusan
  * dipilih orangnya sendiri.
  */
-export function bisaMaju(periode: Periode, hariIni: string): boolean {
-  const berikut = geserPeriode(periode, 1, hariIni);
+export function bisaMaju(
+  periode: Periode,
+  hariIni: string,
+  hint?: Granularitas | null
+): boolean {
+  const berikut = geserPeriode(periode, 1, hariIni, hint);
   return berikut.dari > periode.dari && berikut.sampai <= hariIni;
 }
 
