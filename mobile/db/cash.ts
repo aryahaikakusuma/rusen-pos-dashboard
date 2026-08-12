@@ -34,7 +34,7 @@ export const CASH_CATEGORIES_KELUAR: readonly {
   value: CashCategory;
   label: string;
 }[] = [
-  { value: "bahan", label: "Pembelian Bahan" },
+  { value: "bahan", label: "Stok" },
   { value: "ongkos_kirim", label: "Ongkos Kirim" },
   { value: "listrik", label: "Listrik / Utilitas" },
   { value: "kasbon", label: "Kasbon" },
@@ -59,7 +59,7 @@ export function cashCategoriesFor(
 
 /** Label per nilai, lepas dari arah — untuk menampilkan entri yang sudah tersimpan. */
 export const CASH_CATEGORY_LABELS: Record<CashCategory, string> = {
-  bahan: "Pembelian Bahan",
+  bahan: "Stok",
   ongkos_kirim: "Ongkos Kirim",
   listrik: "Listrik / Utilitas",
   kasbon: "Kasbon",
