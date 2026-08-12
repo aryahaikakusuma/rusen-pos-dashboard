@@ -10,7 +10,7 @@ import {
 import { useSQLiteContext } from "expo-sqlite";
 
 import { useToast } from "../components/Toast";
-import { currentShift, openShift, type OpenShift } from "../db/shift";
+import { currentShift, openShift, type OpenShift, type ShiftLabel } from "../db/shift";
 import { useAuth } from "./auth-context";
 
 interface ShiftValue {
@@ -27,7 +27,7 @@ interface ShiftValue {
   aktif: boolean;
   /** true selama openShift berjalan. */
   membuka: boolean;
-  mulai: (modalAwal: number) => Promise<void>;
+  mulai: (modalAwal: number, label: ShiftLabel) => Promise<void>;
   /** Dipanggil sesudah Tutup Kasir menutup sif. */
   muatUlang: () => Promise<void>;
   /** Dipakai printTutupKasir: sif dianggap habis tanpa perlu membaca ulang. */
@@ -58,7 +58,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   }, [db]);
 
   const mulai = useCallback(
-    async (modalAwal: number) => {
+    async (modalAwal: number, label: ShiftLabel) => {
       if (!session) return;
       setMembuka(true);
       try {
@@ -66,6 +66,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
           employeeId: session.employeeId,
           employeeName: session.name,
           modalAwal,
+          label,
         });
         setShift(await currentShift(db));
       } finally {

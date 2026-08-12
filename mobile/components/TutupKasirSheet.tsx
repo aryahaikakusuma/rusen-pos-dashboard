@@ -92,7 +92,9 @@ export default function TutupKasirSheet({
 
         <Row label="Modal Awal" value={formatRupiah(shift.modalAwal)} />
         <Row label="Tunai" value={formatRupiah(totals.tunai)} />
-        <Row label="Non Tunai" value={formatRupiah(totals.nonTunai)} />
+        <Row label="QRIS" value={formatRupiah(totals.qris)} />
+        <Row label="Transfer" value={formatRupiah(totals.transfer)} />
+        <Row label="Kartu" value={formatRupiah(totals.kartu)} />
         <Row label="Total Penerimaan" value={formatRupiah(penerimaan)} strong />
         <Row label="Refund" value={`-${formatRupiah(totals.refund)}`} />
         <Row label="Saldo Akhir" value={formatRupiah(saldoAkhir)} strong />

@@ -5,7 +5,12 @@
  * supaya tidak ada baris mentah yang bocor ke layar.
  */
 
-import type { OrderStatus, PaymentMethod, TaxStatus } from "../lib/types";
+import type {
+  OrderStatus,
+  PaymentChannel,
+  PaymentMethod,
+  TaxStatus,
+} from "../lib/types";
 
 export type SyncStatus = "pending" | "synced" | "error";
 
@@ -66,6 +71,7 @@ export interface OrderRow {
   paid_by: string | null;
   voided_by: string | null;
   payment_method: PaymentMethod | null;
+  payment_channel: PaymentChannel | null;
   amount_received: number | null;
   change_amount: number | null;
   created_at: string;

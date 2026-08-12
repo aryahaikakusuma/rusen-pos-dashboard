@@ -204,17 +204,12 @@ Yang di bawah ini ditunda dengan sadar.**
 - **Slip "PENJUALAN MENU / Produk Terjual" (rekap per produk) belum dibuat.** Datanya sudah ada
   di `order_items` lokal; yang belum ada hanya rendering strukmya. Ditunda karena hanya
   "TRANSAKSI PENJUALAN" yang diminta di iterasi ini.
-- **Kanal bayar berhenti di Tunai/Non Tunai.** Qris dan Transfer tidak dibedakan di mana pun,
-  termasuk Postgres — menambah kanal berarti kolom baru di `payments`/`orders`, migrasi
-  Postgres, `push_order`, dan halaman Pelunasan menanyakan kanal setiap transaksi non tunai.
-  Ditunda sampai ada yang benar-benar butuh laporan per kanal.
-
-  **Halaman Pelunasan sekarang MENAMPILKAN "QRIS" dan "Debit/Credit Card", dan itu tidak
-  mengubah apa pun di atas.** Keduanya mengirim `non_cash` yang sama persis; pilihannya tidak
-  ditulis ke SQLite, tidak ke Postgres, tidak ke struk, dan hilang begitu halaman ditutup.
-  Jangan memakai tombol itu sebagai bukti bahwa datanya sudah ada — yang bertambah cuma
-  tampilannya. Kalau laporan per kanal akhirnya dibutuhkan, pekerjaan di paragraf pertama masih
-  utuh seluruhnya.
+- ~~**Kanal bayar berhenti di Tunai/Non Tunai.**~~ **Selesai** (`orders.payment_channel`,
+  `supabase/migrations/0030_metode_pembayaran.sql`, `mobile/db/migrations.ts` V11). Tunai, QRIS,
+  Transfer, Kartu — dipilih di app/pay.tsx, tertulis ke SQLite dan Postgres, dan tercetak
+  rinciannya di struk Tutup Kasir. `payment_method` (cash/non_cash) tetap tidak berubah dan tetap
+  satu-satunya sumber "masuk laci atau tidak" — `payment_channel` cuma menambah rincian di
+  atasnya.
 - **Kas Masuk/Keluar ikut lokal saja.** `cash_movements` (V6) menggantung pada `shifts`, dan
   `shifts` tidak naik ke server — jadi pengeluaran belanja stok tidak terlihat dari mana pun
   selain HP yang mencatatnya. Kalau nanti pemilik ingin merekap biaya dari jauh, ia ikut jalur

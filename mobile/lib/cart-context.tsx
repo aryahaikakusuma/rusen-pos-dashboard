@@ -12,7 +12,7 @@ import { useToast } from "../components/Toast";
 import { listProducts } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import { appendToOrder, checkTableCode, createOrder } from "../db/orders";
-import { pushPending } from "../db/push";
+import { pushPending, pushPendingShifts } from "../db/push";
 import type { OrderItemInput, ProductRow, TableConflict } from "../db/types";
 import { useAuth } from "./auth-context";
 import { useGateShift } from "./shift-context";
@@ -230,8 +230,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // "Belum terkirim" sampai ada hal lain yang kebetulan menyegarkannya.
       // Pola yang sama dipakai di AppShell.tsx (`.then(bumpOrders)`).
       void pushPending(db)
-        .then(() => setSavedTick((n) => n + 1))
-        .catch(() => {});
+        .catch(() => {})
+        .then(() => pushPendingShifts(db))
+        .catch(() => {})
+        .then(() => setSavedTick((n) => n + 1));
     } catch (caught) {
       showError(caught);
     } finally {

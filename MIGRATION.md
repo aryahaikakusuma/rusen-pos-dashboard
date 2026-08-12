@@ -54,6 +54,10 @@ then gave `0028` its caller: the per-product trend chart on Laporan Produk. Read
 before adding any series to that chart — the 32-series ceiling is a data-integrity limit, not a
 readability one.
 
+**The dashboard is now deployed** — `rusen-pos-dashboard` on GitHub, auto-deployed to Vercel on
+every push to `main`. See the "Dashboard deployment" section, right before step 8, before
+touching env vars, the repo's remotes, or `tsconfig.json`'s `exclude` list.
+
 **Where to pick up, in the order that makes sense:**
 
 1. **Step 6, reports.** Untouched, and the next real feature. Two decisions are already made
@@ -2073,6 +2077,55 @@ the top three variants — plus one point per date in the range (catching droppe
 default being exactly the table's top 5 in the same order, and 33 codes being refused. Against
 1–31 August 2026: 605 paid orders, gross Rp 36.291.000, all 38 matching. Separately verified that
 32 real codes across two chunks return all 992 rows with every variant total matching the table.
+
+## Dashboard deployment — GitHub repo and Vercel ✅ (web only)
+
+The dashboard now lives at a real URL instead of only `npm run dev`, deployed from a fresh
+GitHub repo (`rusen-pos-dashboard`, owner `aryahaikakusuma`) to Vercel, auto-deploying on every
+push to `main`.
+
+**The repo it deploys from is not the repo this migration originally set up.** An earlier repo,
+`rusen-sop-web`, was created for the web app and then deleted by the owner as unnecessary before
+this deploy — trying to open a PR against it failed with `Could not resolve to a Repository`,
+which is how the deletion was discovered rather than being told upfront. `rusen-pos-dashboard`
+already existed under the same account with unrelated placeholder history (no common ancestor
+with `dashboard-web`), so it was force-pushed over deliberately, with the owner's explicit
+confirmation first — `git push web dashboard-web:main --force`. The local `web` remote and the
+`dashboard-web` branch's upstream both point there now (`git branch -u web/main dashboard-web`).
+
+**Two Vercel build failures happened in sequence, and both were "works locally, fails on a clean
+checkout" — the same shape of bug twice, from two different causes.**
+
+1. **Missing hosted env vars.** The build died right after `Running TypeScript ...`, during
+   Next's "Collecting page data" step, with no error text reaching the visible log tail.
+   `lib/supabase/server.ts` builds its Supabase client as a module-level `const db =
+   createClient(...)`, and the `requireEnv()` guard inside it throws at *import* time, not at
+   request time — so a route that has never been hit yet still aborts the build the moment
+   Next imports it to collect its metadata. Locally this is invisible because `.env.local` is
+   always populated; Vercel had no `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SESSION_SECRET`
+   set at all. Fixed with no code change — the three vars were added in Vercel's dashboard
+   (Project → Settings → Environment Variables), using the **hosted** Supabase project's values
+   (matching `AGENTS.md`'s rule that a deployed web app points at hosted, never local Postgres),
+   not the `127.0.0.1` values that stay commented out in `.env.local`. `SESSION_JWT_SECRET` was
+   not needed — that one is mobile-only, consumed by the `pin-login` Edge Function.
+2. **`mobile/`'s TypeScript leaking into the root build.** Fixed the env vars, redeployed, and
+   hit a second, unrelated failure: `Type error: Cannot find module 'expo-font'`. Root
+   `tsconfig.json`'s `include` was a bare `**/*.ts`/`**/*.tsx`, which also picks up every file
+   under `mobile/` — a separate Expo project with its own `tsconfig.json` and `node_modules`.
+   Vercel's `npm install` only runs at the repo root and never descends into `mobile/`, so
+   `mobile/`'s own dependencies (`expo-font` among them) are simply absent, and `tsc` fails on
+   files that were never meant to be part of this project's typecheck at all. This had never
+   failed on this workstation because `mobile/node_modules` happens to be installed locally.
+   Fixed by adding `"mobile"` to `tsconfig.json`'s `exclude` array (alongside the existing
+   `supabase/functions` exclusion, which exists for the same reason — Deno globals, not Node).
+   Verified with a clean `rm -rf .next && npm run build` before pushing.
+
+**Consequence for anyone deploying this app again, or adding a new root-level module-scoped
+client:** a green `npm run build` on this machine proves nothing about a clean-checkout build —
+this machine's `node_modules` (root *and* `mobile/`) and `.env.local` are both ambient state that
+CI/Vercel does not have. Prefer lazy client construction (inside the request handler, not at
+module scope) over eager singletons where practical, so a missing env var fails one request
+instead of the entire build.
 
 ## Step 8 — Device and store builds
 

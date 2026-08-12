@@ -33,7 +33,7 @@ import {
   refundTotalsByOrder,
   type HistorySweep,
 } from "../db/orders";
-import { countUnsent, pushPending } from "../db/push";
+import { countUnsent, pushPending, pushPendingShifts } from "../db/push";
 import type { OrderItemRow, OrderRow, RefundItemInput } from "../db/types";
 import { useAuth } from "../lib/auth-context";
 import { printBill, printOrder, translatePrinterError } from "../lib/printer";
@@ -182,6 +182,7 @@ export default function OrdersScreen({
       setPushing(true);
       try {
         const result = await pushPending(db);
+        await pushPendingShifts(db).catch(() => {});
         if (!silent) {
           if (result.sent > 0) {
             toast.success(`${result.sent} order terkirim`);

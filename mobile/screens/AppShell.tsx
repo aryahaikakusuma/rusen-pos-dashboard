@@ -17,9 +17,9 @@ import { useToast } from "../components/Toast";
 import TutupKasirConfirm from "../components/TutupKasirConfirm";
 import TutupKasirSheet from "../components/TutupKasirSheet";
 import { shiftCashMovements, type CashMovement } from "../db/cash";
-import { pushPending } from "../db/push";
+import { pushPending, pushPendingShifts } from "../db/push";
 import { useCart } from "../lib/cart-context";
-import { closeShift, shiftTotals, type ShiftTotals } from "../db/shift";
+import { closeShift, shiftTotals, type ShiftLabel, type ShiftTotals } from "../db/shift";
 import { useAuth } from "../lib/auth-context";
 import { printShiftReport, translatePrinterError } from "../lib/printer";
 import { kasSeharusnya, type ShiftReport } from "../lib/receipt";
@@ -124,10 +124,16 @@ export default function AppShell() {
     setTab("orders");
   }, [savedTick, bumpOrders, setTab]);
 
-  const handleOpenShift = async (modalAwal: number) => {
-    await mulai(modalAwal);
-    setModalAwalOpen(false);
-    toast.success("Sif dimulai. Semua fitur aktif.");
+  const handleOpenShift = async (modalAwal: number, label: ShiftLabel) => {
+    try {
+      await mulai(modalAwal, label);
+      setModalAwalOpen(false);
+      toast.success("Sif dimulai. Semua fitur aktif.");
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Gagal memulai sif.";
+      toast.error(message);
+    }
   };
 
   const openTutupKasir = async () => {
@@ -197,6 +203,9 @@ export default function AppShell() {
         modalAwal: shift.modalAwal,
         tunai: tutupKasirTotals.tunai,
         nonTunai: tutupKasirTotals.nonTunai,
+        qris: tutupKasirTotals.qris,
+        transfer: tutupKasirTotals.transfer,
+        kartu: tutupKasirTotals.kartu,
         refund: tutupKasirTotals.refund,
         refundTunai: tutupKasirTotals.refundTunai,
         kasFisik,
@@ -218,6 +227,12 @@ export default function AppShell() {
       // terbuka dan kasir bisa mengulang tanpa kehilangan totalnya.
       await printShiftReport(db, report);
       await closeShift(db, shift.id, tutupKasirTotals, kasFisik, selisih);
+      // Fire-and-forget di titik ini, bukan di useEffect pembuka aplikasi:
+      // kasir masih memegang HP dan koneksinya baru saja terbukti hidup
+      // (struk barusan tercetak), jadi ini momen paling mungkin berhasil.
+      // Kegagalannya diam — sif tetap 'pending' dan tersusul percobaan
+      // berikutnya, sama seperti pushPending untuk order.
+      void pushPendingShifts(db).catch(() => {});
       setTutupKasirOpen(false);
       setTutupKasirTotals(null);
       setTutupKasirGerakan([]);
@@ -241,8 +256,10 @@ export default function AppShell() {
   useEffect(() => {
     if (!session) return;
     pushPending(db)
-      .then(bumpOrders)
-      .catch(() => {});
+      .catch(() => {})
+      .then(() => pushPendingShifts(db))
+      .catch(() => {})
+      .then(bumpOrders);
   }, [db, session, bumpOrders]);
 
   // Tidak ada lagi gerbang penuh layar sebelum Modal Awal diisi. Melihat
@@ -375,7 +392,7 @@ export default function AppShell() {
         <ModalAwalSheet
           cashierName={session.name}
           saving={membuka}
-          onOpen={(modalAwal) => void handleOpenShift(modalAwal)}
+          onOpen={(modalAwal, label) => void handleOpenShift(modalAwal, label)}
           onCancel={() => setModalAwalOpen(false)}
         />
       ) : null}

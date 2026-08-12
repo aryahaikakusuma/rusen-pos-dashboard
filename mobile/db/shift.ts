@@ -11,17 +11,24 @@ import { cashTotals } from "./cash";
 
 const now = () => new Date().toISOString();
 
+export type ShiftLabel = "pagi" | "sore";
+
 export interface OpenShift {
   id: string;
   employeeId: string;
   employeeName: string;
   modalAwal: number;
   openedAt: string;
+  label: ShiftLabel | null;
 }
 
 export interface ShiftTotals {
   tunai: number;
   nonTunai: number;
+  /** Rincian penjualan non tunai per kanal — lihat PAYMENT_CHANNELS di lib/types.ts. */
+  qris: number;
+  transfer: number;
+  kartu: number;
   refund: number;
   /** Refund atas order tunai saja — dipakai menghitung Kas Seharusnya. */
   refundTunai: number;
@@ -49,8 +56,9 @@ export async function currentShift(
     employee_name: string;
     modal_awal: number;
     opened_at: string;
+    label: ShiftLabel | null;
   }>(
-    `select id, employee_id, employee_name, modal_awal, opened_at
+    `select id, employee_id, employee_name, modal_awal, opened_at, label
      from shifts where closed_at is null
      order by opened_at desc limit 1`
   );
@@ -61,18 +69,35 @@ export async function currentShift(
     employeeName: row.employee_name,
     modalAwal: row.modal_awal,
     openedAt: row.opened_at,
+    label: row.label,
   };
 }
 
+/**
+ * Menolak kalau sudah ada sif berstatus open — jaminan "satu sif open per
+ * perangkat" di level fungsi, bukan cuma di gerbang UI (tombol menu yang
+ * berganti "Mulai Shift" / "Tutup Kasir" berdasar `aktif`). Gerbang UI cukup
+ * untuk alur normal tapi tidak menolak pemanggilan lain ke fungsi ini.
+ */
 export async function openShift(
   db: SQLiteDatabase,
-  params: { employeeId: string; employeeName: string; modalAwal: number }
+  params: {
+    employeeId: string;
+    employeeName: string;
+    modalAwal: number;
+    label: ShiftLabel;
+  }
 ): Promise<string> {
+  const existing = await currentShift(db);
+  if (existing) {
+    throw new Error("Masih ada sif yang terbuka. Tutup sif itu dulu.");
+  }
+
   const id = Crypto.randomUUID();
   await db.runAsync(
-    `insert into shifts (id, employee_id, employee_name, modal_awal, opened_at)
-     values (?, ?, ?, ?, ?)`,
-    [id, params.employeeId, params.employeeName, params.modalAwal, now()]
+    `insert into shifts (id, employee_id, employee_name, modal_awal, opened_at, label)
+     values (?, ?, ?, ?, ?, ?)`,
+    [id, params.employeeId, params.employeeName, params.modalAwal, now(), params.label]
   );
   return id;
 }
@@ -109,12 +134,21 @@ export async function shiftTotals(
   const uang = await db.getFirstAsync<{
     tunai: number;
     non_tunai: number;
+    qris: number;
+    transfer: number;
+    kartu: number;
     pajak: number;
     transaksi_selesai: number;
   }>(
     `select
        coalesce(sum(case when payment_method = 'cash' then total else 0 end), 0) as tunai,
        coalesce(sum(case when payment_method = 'non_cash' then total else 0 end), 0) as non_tunai,
+       -- Rincian kanal, murni untuk struk — TIDAK dipakai kas laci. Yang
+       -- menentukan "masuk laci atau tidak" tetap payment_method di atas,
+       -- persis seperti sebelum kolom payment_channel ada.
+       coalesce(sum(case when payment_channel = 'qris' then total else 0 end), 0) as qris,
+       coalesce(sum(case when payment_channel = 'transfer' then total else 0 end), 0) as transfer,
+       coalesce(sum(case when payment_channel = 'card' then total else 0 end), 0) as kartu,
        coalesce(sum(tax_amount), 0) as pajak,
        count(*) as transaksi_selesai
      from orders
@@ -166,6 +200,9 @@ export async function shiftTotals(
   return {
     tunai: uang?.tunai ?? 0,
     nonTunai: uang?.non_tunai ?? 0,
+    qris: uang?.qris ?? 0,
+    transfer: uang?.transfer ?? 0,
+    kartu: uang?.kartu ?? 0,
     pajak: uang?.pajak ?? 0,
     transaksiSelesai: uang?.transaksi_selesai ?? 0,
     transaksiPending: pending?.n ?? 0,

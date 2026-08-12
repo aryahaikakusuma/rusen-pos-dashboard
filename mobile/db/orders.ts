@@ -13,7 +13,7 @@ import * as Crypto from "expo-crypto";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import { hitungPbjt } from "../lib/tax";
-import type { PaymentMethod, TaxStatus } from "../lib/types";
+import { paymentMethodFor, type PaymentChannel, type TaxStatus } from "../lib/types";
 import { taxRateBps } from "./catalog";
 import { OrderError } from "./errors";
 import type {
@@ -600,7 +600,7 @@ export async function payOrder(
   db: SQLiteDatabase,
   params: {
     orderId: string;
-    method: PaymentMethod;
+    channel: PaymentChannel;
     amountReceived: number | null;
     employeeId: string;
     taxStatus: TaxStatus;
@@ -608,6 +608,10 @@ export async function payOrder(
 ): Promise<void> {
   const rateBps = await taxRateBps(db);
   if (rateBps === null) throw new OrderError("TAX_RATE_UNKNOWN");
+
+  // `method` selalu diturunkan dari `channel`, tidak pernah diterima terpisah
+  // — lihat catatan paymentMethodFor di lib/types.ts.
+  const method = paymentMethodFor(params.channel);
 
   await db.withExclusiveTransactionAsync(async (txn) => {
     const order = await txn.getFirstAsync<OrderRow>(
@@ -630,7 +634,7 @@ export async function payOrder(
     const total = subtotal + tax;
 
     let received: number;
-    if (params.method === "cash") {
+    if (method === "cash") {
       if (params.amountReceived === null || params.amountReceived < total) {
         throw new OrderError("INSUFFICIENT_AMOUNT");
       }
@@ -647,7 +651,7 @@ export async function payOrder(
            tax_status = ?, tax_rate_bps = ?, tax_amount = ?,
            tax_exempt_reason = ?, tax_approved_by = ?,
            paid_at = ?, paid_by = ?,
-           payment_method = ?, amount_received = ?, change_amount = ?,
+           payment_method = ?, payment_channel = ?, amount_received = ?, change_amount = ?,
            version = version + 1, sync_status = 'pending', sync_error = null
        where id = ?`,
       [
@@ -669,7 +673,8 @@ export async function payOrder(
         params.taxStatus === "exempt" ? params.employeeId : null,
         paidAt,
         params.employeeId,
-        params.method,
+        method,
+        params.channel,
         received,
         received - total,
         order.id,
@@ -683,7 +688,7 @@ export async function payOrder(
       [
         Crypto.randomUUID(),
         order.id,
-        params.method,
+        method,
         // Yang masuk laci adalah angka tagihan, termasuk pajaknya. push_order
         // menolak kiriman yang nilainya bukan ini (PAYMENT_AMOUNT_MISMATCH).
         total,

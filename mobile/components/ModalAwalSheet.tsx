@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
+import type { ShiftLabel } from "../db/shift";
 import { colors, radius, semantic, spacing, textStyles, touchTarget } from "../theme";
 import Button from "./Button";
 import Sheet from "./Sheet";
@@ -8,10 +9,15 @@ import Sheet from "./Sheet";
 /** Modal laci baku satu sif. Kasir boleh mengubah, tapi tidak boleh mengosongkan. */
 const MODAL_AWAL_DEFAULT = 500000;
 
+const LABEL_OPTIONS: readonly [ShiftLabel, string][] = [
+  ["pagi", "Pagi"],
+  ["sore", "Sore"],
+];
+
 interface ModalAwalSheetProps {
   cashierName: string;
   saving: boolean;
-  onOpen: (modalAwal: number) => void;
+  onOpen: (modalAwal: number, label: ShiftLabel) => void;
   onCancel: () => void;
 }
 
@@ -33,8 +39,14 @@ export default function ModalAwalSheet({
   onCancel,
 }: ModalAwalSheetProps) {
   const [text, setText] = useState(String(MODAL_AWAL_DEFAULT));
+  const [label, setLabel] = useState<ShiftLabel | null>(null);
   const modalAwal = Number(text.replace(/[^0-9]/g, "")) || 0;
-  const kosong = modalAwal <= 0;
+  // Kosong berarti isiannya benar-benar tidak ada, BUKAN nilainya nol —
+  // "0" adalah modal awal yang sah (laci memang belum diisi apa-apa pagi ini).
+  // Menyamakan keduanya (pola lama `modalAwal <= 0`) menolak "0" yang justru
+  // sah, dan itu berbeda dari kosong yang memang harus ditolak.
+  const kosong = text.trim().length === 0;
+  const bolehMulai = !kosong && label !== null;
 
   return (
     <Sheet
@@ -47,15 +59,30 @@ export default function ModalAwalSheet({
           <Button
             label="Mulai Sif"
             variant="primary"
-            disabled={kosong}
+            disabled={!bolehMulai}
             loading={saving}
             loadingLabel="Menyimpan…"
-            onPress={() => onOpen(modalAwal)}
+            onPress={() => {
+              if (label) onOpen(modalAwal, label);
+            }}
           />
           <Button label="Batal" disabled={saving} onPress={onCancel} />
         </>
       }>
       <View style={styles.card}>
+        <Text style={styles.hint}>Pilih sif yang sedang dijalani.</Text>
+        <View style={styles.labelRow}>
+          {LABEL_OPTIONS.map(([option, optionLabel]) => (
+            <Button
+              key={option}
+              label={optionLabel}
+              disabled={saving}
+              style={[styles.labelButton, label === option && styles.labelActive]}
+              onPress={() => setLabel(option)}
+            />
+          ))}
+        </View>
+
         <Text style={styles.hint}>
           Masukkan modal awal laci sebelum mulai melayani. Angka ini akan
           muncul di laporan Tutup Kasir nanti.
@@ -71,7 +98,7 @@ export default function ModalAwalSheet({
           accessibilityLabel="Modal awal laci"
         />
         {kosong ? (
-          <Text style={styles.salah}>Modal awal tidak boleh kosong atau nol.</Text>
+          <Text style={styles.salah}>Modal awal tidak boleh kosong.</Text>
         ) : null}
       </View>
     </Sheet>
@@ -86,6 +113,20 @@ const styles = StyleSheet.create({
   hint: {
     ...textStyles.caption,
     color: semantic.textSecondary,
+  },
+  labelRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  labelButton: {
+    flex: 1,
+  },
+  // Netral gelap, bukan biru: DESIGN.md menyimpan biru untuk aksi utama
+  // ("Mulai Sif"), dan pilihan Pagi/Sore adalah status, bukan tombol yang
+  // dituju kasir.
+  labelActive: {
+    borderColor: semantic.sidebarActive,
+    backgroundColor: semantic.surfaceMuted,
   },
   input: {
     minHeight: touchTarget.comfortable,

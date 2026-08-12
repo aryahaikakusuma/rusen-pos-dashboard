@@ -9,10 +9,13 @@ import Sheet from "../components/Sheet";
 import ShiftBanner from "../components/ShiftBanner";
 import { useToast } from "../components/Toast";
 import {
+  CASH_CATEGORY_LABELS,
+  cashCategoriesFor,
   cashTotals,
   recordCashMovement,
+  reverseCashMovement,
   shiftCashMovements,
-  voidCashMovement,
+  type CashCategory,
   type CashDirection,
   type CashMethod,
   type CashMovement,
@@ -61,9 +64,18 @@ export default function KasScreen() {
   const [saving, setSaving] = useState(false);
   const [direction, setDirection] = useState<CashDirection>("out");
   const [method, setMethod] = useState<CashMethod>("cash");
+  const [category, setCategory] = useState<CashCategory | null>(null);
   const [nominalText, setNominalText] = useState("");
   const [note, setNote] = useState("");
   const [konfirmasi, setKonfirmasi] = useState<CashMovement | null>(null);
+
+  // Kategori kas keluar dan kas masuk adalah dua daftar berbeda (db/cash.ts).
+  // Pilihan lama dibuang begitu arah berganti supaya tidak ada kategori "Kasbon"
+  // (kas keluar) yang diam-diam masih terpasang saat kasir memilih "Masuk".
+  const ubahArah = (next: CashDirection) => {
+    setDirection(next);
+    setCategory(null);
+  };
 
   const muatKas = useCallback(async () => {
     if (!shift) {
@@ -93,25 +105,27 @@ export default function KasScreen() {
   // dibedakan dari uang hilang, yang persis masalah yang mau dihapus. Jadi ia
   // dijaga di tombol — mati selama salah satu belum diisi — bukan lewat
   // peringatan sesudah ditekan, yang baru mengajari setelah kasir salah.
-  const bolehSimpan = !readOnly && amount > 0 && note.trim().length > 0;
+  const bolehSimpan =
+    !readOnly && amount > 0 && note.trim().length > 0 && category !== null;
 
   const simpan = async () => {
     if (!gateShift("mencatat kas")) return;
-    if (!shift || !session) return;
+    if (!shift || !session || !category) return;
     setSaving(true);
     try {
       await recordCashMovement(db, {
         shiftId: shift.id,
         direction,
         method,
+        category,
         amount,
         note,
         employeeId: session.employeeId,
         employeeName: session.name,
       });
       await muatKas();
-      // Arah dan metode sengaja tidak ikut dikosongkan: kasir sering mencatat
-      // beberapa pengeluaran tunai berturut-turut, dan memilih ulang "Keluar"
+      // Arah, metode, dan kategori sengaja tidak ikut dikosongkan: kasir sering
+      // mencatat beberapa pengeluaran sejenis berturut-turut, dan memilih ulang
       // tiap kali hanya menambah ketukan tanpa mencegah kesalahan apa pun.
       //
       // Dikosongkan hanya kalau benar-benar tersimpan: mengosongkan begitu
@@ -129,13 +143,29 @@ export default function KasScreen() {
     }
   };
 
-  const batalkan = async (id: string) => {
-    if (!gateShift("membatalkan entri kas")) return;
-    if (!shift) return;
+  // Entri yang sudah punya koreksinya sendiri tidak ditawari tombol kedua kali
+  // — reverseCashMovement menolaknya juga, tapi mematikan tombolnya di sini
+  // menghindari kasir menekan lalu membaca pesan gagal untuk hal yang sudah
+  // jelas dari daftar. Entri yang MERUPAKAN koreksi (reversesId terisi) juga
+  // tidak ditawari koreksi kedua — mengoreksi sebuah koreksi bukan alur yang
+  // diminta, dan barisnya sendiri sudah menetralkan entri aslinya.
+  const idYangSudahDikoreksi = new Set(
+    entries.map((e) => e.reversesId).filter((id): id is string => id !== null)
+  );
+
+  const koreksi = async (id: string) => {
+    if (!gateShift("mengoreksi entri kas")) return;
+    if (!shift || !session) return;
     setSaving(true);
     try {
-      await voidCashMovement(db, id);
+      await reverseCashMovement(db, {
+        id,
+        employeeId: session.employeeId,
+        employeeName: session.name,
+      });
       await muatKas();
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setSaving(false);
     }
@@ -173,17 +203,35 @@ export default function KasScreen() {
           <View style={styles.choices}>
             <Button
               label="Masuk"
-              onPress={() => setDirection("in")}
+              onPress={() => ubahArah("in")}
               style={[styles.choice, direction === "in" && styles.choiceActive]}
             />
             <Button
               label="Keluar"
-              onPress={() => setDirection("out")}
+              onPress={() => ubahArah("out")}
               style={[
                 styles.choice,
                 direction === "out" && styles.choiceActive,
               ]}
             />
+          </View>
+        </View>
+
+        <View>
+          <Text style={styles.fieldLabel}>Kategori</Text>
+          <View style={styles.choicesWrap}>
+            {cashCategoriesFor(direction).map(({ value, label }) => (
+              <Button
+                key={value}
+                label={label}
+                labelStyle={styles.choiceLabel}
+                onPress={() => setCategory(value)}
+                style={[
+                  styles.choiceWrap,
+                  category === value && styles.choiceActive,
+                ]}
+              />
+            ))}
           </View>
         </View>
 
@@ -247,34 +295,47 @@ export default function KasScreen() {
             // Terbaru di atas: yang baru saja dicatat adalah yang paling
             // mungkin salah ketik dan paling mungkin dibatalkan. Kertas
             // tetap mencetaknya berurutan waktu — itu urutan kejadian.
-            [...entries].reverse().map((entry) => (
-              <View key={entry.id} style={styles.entry}>
-                <View style={styles.entryText}>
-                  <Text style={styles.entryNote}>{entry.note}</Text>
-                  <Text style={styles.entryMeta}>
-                    {entry.direction === "in" ? "Masuk" : "Keluar"} ·{" "}
-                    {entry.method === "cash" ? "Tunai" : "Non Tunai"}
-                  </Text>
+            [...entries].reverse().map((entry) => {
+              const sudahDikoreksi = idYangSudahDikoreksi.has(entry.id);
+              const iniKoreksi = entry.reversesId !== null;
+              return (
+                <View key={entry.id} style={styles.entry}>
+                  <View style={styles.entryText}>
+                    <Text style={styles.entryNote}>{entry.note}</Text>
+                    <Text style={styles.entryMeta}>
+                      {entry.direction === "in" ? "Masuk" : "Keluar"} ·{" "}
+                      {entry.method === "cash" ? "Tunai" : "Non Tunai"}
+                      {entry.category
+                        ? ` · ${CASH_CATEGORY_LABELS[entry.category]}`
+                        : ""}
+                      {sudahDikoreksi ? " · Dikoreksi" : ""}
+                    </Text>
+                  </View>
+                  <View style={styles.entryRight}>
+                    <Text
+                      style={[
+                        styles.entryAmount,
+                        entry.direction === "in"
+                          ? styles.entryAmountMasuk
+                          : styles.entryAmountKeluar,
+                      ]}>
+                      {formatRupiah(entry.amount)}
+                    </Text>
+                    {/* Entri yang sudah dikoreksi atau yang MERUPAKAN koreksi
+                        tidak ditawari tombol lagi — lihat catatan
+                        idYangSudahDikoreksi di atas. */}
+                    {sudahDikoreksi || iniKoreksi ? null : (
+                      <Button
+                        label="Koreksi"
+                        onPress={() => setKonfirmasi(entry)}
+                        disabled={saving || readOnly}
+                        style={styles.entryAction}
+                      />
+                    )}
+                  </View>
                 </View>
-                <View style={styles.entryRight}>
-                  <Text
-                    style={[
-                      styles.entryAmount,
-                      entry.direction === "in"
-                        ? styles.entryAmountMasuk
-                        : styles.entryAmountKeluar,
-                    ]}>
-                    {formatRupiah(entry.amount)}
-                  </Text>
-                  <Button
-                    label="Batalkan"
-                    onPress={() => setKonfirmasi(entry)}
-                    disabled={saving || readOnly}
-                    style={styles.entryAction}
-                  />
-                </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -292,17 +353,17 @@ export default function KasScreen() {
 
       {konfirmasi ? (
         <Sheet
-          title="Batalkan entri kas"
+          title="Koreksi entri kas"
           subtitle={konfirmasi.note}
           onClose={() => setKonfirmasi(null)}
           footer={
             <>
               <Button
-                label={`Batalkan ${formatRupiah(konfirmasi.amount)}`}
+                label={`Koreksi ${formatRupiah(konfirmasi.amount)}`}
                 variant="danger"
                 disabled={saving}
                 onPress={() => {
-                  void batalkan(konfirmasi.id);
+                  void koreksi(konfirmasi.id);
                   setKonfirmasi(null);
                 }}
               />
@@ -318,11 +379,12 @@ export default function KasScreen() {
                 ClearHistoryDialog. Pertanyaan tanpa angka hanya menghasilkan
                 satu ketukan refleks. */}
             <Text style={styles.konfirmasiBody}>
-              {konfirmasi.direction === "in" ? "Kas masuk" : "Kas keluar"}{" "}
+              Entri {konfirmasi.direction === "in" ? "kas masuk" : "kas keluar"}{" "}
               {konfirmasi.method === "cash" ? "tunai" : "non tunai"} sebesar{" "}
-              {formatRupiah(konfirmasi.amount)} tidak akan lagi ikut dihitung
-              dan tidak tercetak di Tutup Kasir. Barisnya tetap tersimpan di
-              ponsel ini sebagai jejak, jadi pembatalan bukan penghapusan.
+              {formatRupiah(konfirmasi.amount)} akan dikoreksi dengan entri baru
+              berarah kebalikan dan nominal sama. Keduanya tetap ikut dihitung
+              dan tercetak di Tutup Kasir sebagai jejak — bukan dihapus atau
+              disembunyikan.
             </Text>
           </View>
         </Sheet>
@@ -394,6 +456,21 @@ const styles = StyleSheet.create({
   },
   choices: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
   choice: { flex: 1 },
+  // Kategori bisa sampai enam pilihan (kas keluar) — tidak muat satu baris
+  // seperti Arah/Metode yang selalu dua. Membungkus, bukan menyempitkan tiap
+  // tombol sampai labelnya terpotong.
+  choicesWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  choiceWrap: { flexGrow: 1, flexBasis: "30%" },
+  // Button.label bawaan pakai textStyles.actionButton (18px semibold), yang
+  // membungkus "Setoran ke Pemilik" dan "Lain-lain" di tengah kata pada layar
+  // kasir — token satu tingkat lebih kecil (bodyStrong, 16px) cukup untuk
+  // memutus baris di spasi, bukan di tengah huruf.
+  choiceLabel: { ...textStyles.bodyStrong },
   choiceActive: {
     borderColor: semantic.sidebarActive,
     backgroundColor: semantic.surfaceMuted,

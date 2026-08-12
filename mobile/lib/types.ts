@@ -9,6 +9,57 @@ export type OrderStatus = "pending" | "paid" | "void";
 
 export type PaymentMethod = "cash" | "non_cash";
 
+/**
+ * Kanal bayar sungguhan — lebih rinci dari `PaymentMethod`, yang cuma tahu
+ * "masuk laci atau tidak". `PaymentMethod` tetap sumber kebenaran untuk itu
+ * (dan tidak disentuh oleh penambahan ini); `PaymentChannel` menambah rincian
+ * DI ATASNYA, bukan menggantikannya. Konstanta di kode, bukan tabel — nilai
+ * baru berarti baris baru di sini, bukan migrasi tabel referensi.
+ */
+export type PaymentChannel = "cash" | "qris" | "transfer" | "card";
+
+export const PAYMENT_CHANNELS: readonly {
+  value: PaymentChannel;
+  label: string;
+  /** Satu-satunya penanda yang boleh dipakai perhitungan kas laci. */
+  masukLaci: boolean;
+}[] = [
+  { value: "cash", label: "Tunai", masukLaci: true },
+  { value: "qris", label: "QRIS", masukLaci: false },
+  { value: "transfer", label: "Transfer", masukLaci: false },
+  { value: "card", label: "Kartu", masukLaci: false },
+];
+
+/**
+ * `payment_channel` yang bisa TERBACA dari server tapi TIDAK BOLEH pernah
+ * dipilih kasir — hanya `'non_cash_legacy'` sejauh ini (supabase/migrations/
+ * 0030_metode_pembayaran.sql), ditulis satu kali oleh backfill untuk order
+ * lunas non tunai dari sebelum kolom ini ada, saat kanal sungguhannya tidak
+ * pernah tersimpan di mana pun. Sengaja terpisah dari `PAYMENT_CHANNELS`:
+ * array itu dipakai `app/pay.tsx` untuk merender tab yang bisa ditekan, jadi
+ * menaruh nilai ini di sana akan membuatnya terpilih sebagai kanal baru —
+ * persis yang tidak boleh terjadi.
+ */
+export type PaymentChannelStored = PaymentChannel | "non_cash_legacy";
+
+/** Label tampilan untuk SETIAP nilai yang mungkin ada di `payment_channel`,
+ * termasuk yang tidak bisa dipilih. Dipakai layar/laporan mana pun yang
+ * menampilkan kanal ke manusia, supaya `'non_cash_legacy'` tidak pernah
+ * tercetak mentah. */
+export const PAYMENT_CHANNEL_LABELS: Record<PaymentChannelStored, string> = {
+  cash: "Tunai",
+  qris: "QRIS",
+  transfer: "Transfer",
+  card: "Kartu",
+  non_cash_legacy: "Non-tunai (data lama)",
+};
+
+/** `PaymentMethod` diturunkan dari kanal, tidak pernah dipilih terpisah — dua
+ * masukan independen untuk satu fakta adalah cara pasti keduanya berselisih. */
+export function paymentMethodFor(channel: PaymentChannel): PaymentMethod {
+  return channel === "cash" ? "cash" : "non_cash";
+}
+
 /** Status PBJT satu order. Cerminan enum `tax_status` di Postgres. */
 export type TaxStatus = "taxable" | "exempt";
 

@@ -21,7 +21,7 @@ import { useToast } from "../components/Toast";
 import { taxRateBps } from "../db/catalog";
 import { translateOrderError } from "../db/errors";
 import { getOrder, payOrder } from "../db/orders";
-import { pushPending } from "../db/push";
+import { pushPending, pushPendingShifts } from "../db/push";
 import type { OrderItemRow, OrderRow } from "../db/types";
 import { useAuth } from "../lib/auth-context";
 import { printOrder, translatePrinterError } from "../lib/printer";
@@ -30,8 +30,9 @@ import { hitungPbjt, labelPbjt } from "../lib/tax";
 import { useShortViewport } from "../lib/use-layout-mode";
 import {
   formatRupiah,
+  PAYMENT_CHANNELS,
   tableLabel,
-  type PaymentMethod,
+  type PaymentChannel,
   type TaxStatus,
 } from "../lib/types";
 import {
@@ -100,10 +101,7 @@ export default function PayScreen() {
   const [rateBps, setRateBps] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState("");
-  const [channel, setChannel] = useState<"cash" | "transfer">("cash");
-  const [transferKind, setTransferKind] = useState<"qris" | "card" | null>(
-    null
-  );
+  const [channel, setChannel] = useState<PaymentChannel>("cash");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>("taxable");
   const [cash, setCash] = useState<CashAmount | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -142,8 +140,6 @@ export default function PayScreen() {
       ? 0
       : hitungPbjt(order.taxable_subtotal, rateBps);
   const tagihan = subtotal + tax;
-
-  const method: PaymentMethod = channel === "cash" ? "cash" : "non_cash";
 
   // Dibaca dari pilihan, bukan dari angka tersimpan — lihat catatan CashAmount.
   const amountReceived =
@@ -188,8 +184,8 @@ export default function PayScreen() {
     try {
       await payOrder(db, {
         orderId: order.id,
-        method,
-        amountReceived: method === "cash" ? amountReceived : null,
+        channel,
+        amountReceived: channel === "cash" ? amountReceived : null,
         employeeId: session.employeeId,
         taxStatus,
       });
@@ -218,7 +214,10 @@ export default function PayScreen() {
       })();
       // Percobaan kirim di momen yang pasti terjadi. Kalau ada sinyal, order
       // sampai tanpa kasir perlu memikirkannya; kalau tidak, badge tetap hidup.
-      void pushPending(db).catch(() => {});
+      void pushPending(db)
+        .catch(() => {})
+        .then(() => pushPendingShifts(db))
+        .catch(() => {});
     } catch (caught) {
       const message = translateOrderError(caught);
       setPayError(message);
@@ -230,7 +229,7 @@ export default function PayScreen() {
     db,
     order,
     session,
-    method,
+    channel,
     amountReceived,
     taxStatus,
     gateShift,
@@ -323,48 +322,83 @@ export default function PayScreen() {
         {/* Kanal bayar sebagai tab, bukan tombol sebesar yang lain: ia
             menentukan APA yang muncul di bawahnya, dan sesuatu yang mengubah
             isi layar tidak boleh terlihat sama beratnya dengan sesuatu yang
-            memasukkan angka. */}
+            memasukkan angka. Tunai adalah tab pertama dan bawaan — kasir
+            menekannya puluhan kali sehari, jadi tidak boleh ada di balik apa
+            pun (lihat PAYMENT_CHANNELS, lib/types.ts).
+
+            Dua tingkat: tingkat 1 cuma Tunai/Non Tunai (bentuk aslinya,
+            diminta pemilik lagi setelah melihat versi empat tombol di
+            perangkat). Non Tunai membuka tingkat 2 berisi QRIS/Kartu/
+            Transfer dengan QRIS terpilih otomatis — kanal non tunai paling
+            sering dipakai, jadi jalur yang paling sering tetap satu ketukan
+            ekstra, bukan dua. Kembali ke tingkat 1 cukup menekan Tunai lagi,
+            pola yang sama dengan tab kanal sebelumnya: menekan pilihan lain
+            langsung mengganti, tidak ada tombol "kembali" terpisah di layar
+            ini. */}
         <View style={styles.tabRow}>
           {(
             [
-              ["cash", "Cash"],
-              ["transfer", "Transfer"],
+              { key: "cash", label: "Tunai" },
+              { key: "non_cash", label: "Non Tunai" },
             ] as const
-          ).map(([option, label]) => (
-            <Pressable
-              key={option}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: channel === option }}
-              disabled={submitting}
-              onPress={() => {
-                setChannel(option);
-                // Nominal tunai dibuang saat pindah ke transfer. Kalau tidak,
-                // kembali ke Cash memunculkan kotak kembalian berisi angka dari
-                // keputusan yang sudah ditinggalkan.
-                if (option === "transfer") {
-                  setCash(null);
-                  setManualOpen(false);
-                } else {
-                  setTransferKind(null);
-                }
-              }}
-              style={styles.tab}>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  channel === option && styles.tabLabelActive,
-                ]}>
-                {label}
-              </Text>
-              <View
-                style={[
-                  styles.tabUnderline,
-                  channel === option && styles.tabUnderlineActive,
-                ]}
-              />
-            </Pressable>
-          ))}
+          ).map(({ key, label }) => {
+            const active = key === "cash" ? channel === "cash" : channel !== "cash";
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                disabled={submitting}
+                onPress={() => {
+                  if (key === "cash") {
+                    setChannel("cash");
+                  } else if (channel === "cash") {
+                    setChannel("qris");
+                    setCash(null);
+                    setManualOpen(false);
+                  }
+                }}
+                style={styles.tab}>
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                  {label}
+                </Text>
+                <View
+                  style={[styles.tabUnderline, active && styles.tabUnderlineActive]}
+                />
+              </Pressable>
+            );
+          })}
         </View>
+
+        {channel !== "cash" ? (
+          <View style={styles.tabRow}>
+            {PAYMENT_CHANNELS.filter(({ value }) => value !== "cash").map(
+              ({ value, label }) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: channel === value }}
+                  disabled={submitting}
+                  onPress={() => setChannel(value)}
+                  style={styles.tab}>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      channel === value && styles.tabLabelActive,
+                    ]}>
+                    {label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.tabUnderline,
+                      channel === value && styles.tabUnderlineActive,
+                    ]}
+                  />
+                </Pressable>
+              )
+            )}
+          </View>
+        ) : null}
 
         {channel === "cash" ? (
           <View style={styles.cashBlock}>
@@ -419,35 +453,7 @@ export default function PayScreen() {
               ))}
             </View>
           </View>
-        ) : (
-          <View style={styles.methodRow}>
-            {(
-              [
-                ["qris", "QRIS"],
-                ["card", "Debit/Credit Card"],
-              ] as const
-            ).map(([option, label]) => (
-              <Button
-                key={option}
-                label={label}
-                disabled={submitting}
-                style={[
-                  styles.methodButton,
-                  transferKind === option && styles.cashActive,
-                ]}
-                // CATATAN: pilihan ini TIDAK disimpan ke mana pun — tidak ke
-                // SQLite, tidak ke Postgres, tidak ke struk. Keduanya mengirim
-                // `non_cash` yang sama persis. Membedakan kanal sungguhan
-                // menuntut kolom baru di orders/payments dan migrasi di kedua
-                // basis data (TO_DO.md, "Kanal bayar berhenti di Tunai/Non
-                // Tunai"), dan itu sengaja belum dikerjakan. Jangan memakai
-                // tombol ini sebagai sumber data laporan: begitu halaman ini
-                // ditutup, jawabannya hilang.
-                onPress={() => setTransferKind(option)}
-              />
-            ))}
-          </View>
-        )}
+        ) : null}
 
         {payError ? (
           <View style={styles.errorBox}>

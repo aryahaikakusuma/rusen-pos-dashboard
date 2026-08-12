@@ -182,6 +182,7 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
     paid_by: order.paid_by,
     voided_by: order.voided_by,
     payment_method: order.payment_method,
+    payment_channel: order.payment_channel,
     amount_received: order.amount_received,
     change_amount: order.change_amount,
     created_at: order.created_at,
@@ -249,6 +250,139 @@ async function buildPayload(db: SQLiteDatabase, order: OrderRow) {
       })),
     })),
   };
+}
+
+interface ShiftRow {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  modal_awal: number;
+  opened_at: string;
+  closed_at: string;
+  label: string | null;
+  tunai: number | null;
+  non_tunai: number | null;
+  refund: number | null;
+  refund_tunai: number | null;
+  pajak: number | null;
+  kas_masuk_tunai: number | null;
+  kas_masuk_non_tunai: number | null;
+  kas_keluar_tunai: number | null;
+  kas_keluar_non_tunai: number | null;
+  kas_fisik: number | null;
+  selisih: number | null;
+  transaksi_selesai: number | null;
+  transaksi_pending: number | null;
+}
+
+interface CashMovementRow {
+  id: string;
+  shift_id: string;
+  direction: string;
+  method: string;
+  category: string | null;
+  amount: number;
+  note: string;
+  employee_id: string;
+  employee_name: string;
+  created_at: string;
+  voided_at: string | null;
+  reverses_id: string | null;
+}
+
+/** Berapa sif yang belum sampai ke server. Ditopang indeks shifts_sync_idx. */
+export async function countUnsentShifts(db: SQLiteDatabase): Promise<number> {
+  const row = await db.getFirstAsync<{ n: number }>(
+    "select count(*) as n from shifts where sync_status <> 'synced' and closed_at is not null"
+  );
+  return row?.n ?? 0;
+}
+
+/**
+ * Mengirim setiap sif tertutup yang tertunda, satu per satu. Cerminan
+ * `pushPending` di atas — struktur, penanganan galat, dan bahasa pesannya
+ * sengaja sama, bukan digeneralkan jadi satu mekanisme bersama.
+ *
+ * Sif yang masih terbuka tidak pernah disertakan di query-nya: server menolak
+ * `closed_at` null (SHIFT_NOT_CLOSED), dan mengirim sif yang belum tertutup
+ * tidak pernah bisa berhasil.
+ */
+export async function pushPendingShifts(db: SQLiteDatabase): Promise<PushResult> {
+  const shifts = await db.getAllAsync<ShiftRow>(
+    `select * from shifts
+     where sync_status <> 'synced' and closed_at is not null
+     order by closed_at`
+  );
+
+  let sent = 0;
+  let failed = 0;
+  let lastError: string | null = null;
+
+  for (const shift of shifts) {
+    try {
+      const movements = await db.getAllAsync<CashMovementRow>(
+        "select * from cash_movements where shift_id = ? order by created_at",
+        [shift.id]
+      );
+
+      const payload = {
+        id: shift.id,
+        employee_id: shift.employee_id,
+        employee_name: shift.employee_name,
+        modal_awal: shift.modal_awal,
+        opened_at: shift.opened_at,
+        closed_at: shift.closed_at,
+        label: shift.label,
+        tunai: shift.tunai,
+        non_tunai: shift.non_tunai,
+        refund: shift.refund,
+        refund_tunai: shift.refund_tunai,
+        pajak: shift.pajak,
+        kas_masuk_tunai: shift.kas_masuk_tunai,
+        kas_masuk_non_tunai: shift.kas_masuk_non_tunai,
+        kas_keluar_tunai: shift.kas_keluar_tunai,
+        kas_keluar_non_tunai: shift.kas_keluar_non_tunai,
+        kas_fisik: shift.kas_fisik,
+        selisih: shift.selisih,
+        transaksi_selesai: shift.transaksi_selesai,
+        transaksi_pending: shift.transaksi_pending,
+        cash_movements: movements.map((m) => ({
+          id: m.id,
+          shift_id: m.shift_id,
+          direction: m.direction,
+          method: m.method,
+          category: m.category,
+          amount: m.amount,
+          note: m.note,
+          employee_id: m.employee_id,
+          employee_name: m.employee_name,
+          created_at: m.created_at,
+          voided_at: m.voided_at,
+          reverses_id: m.reverses_id,
+        })),
+      };
+
+      const { error } = await supabase.rpc("push_shift", { p_shift: payload });
+      if (error) throw new Error(error.message);
+
+      await db.runAsync(
+        "update shifts set sync_status = 'synced', sync_error = null where id = ?",
+        [shift.id]
+      );
+      sent += 1;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal mengirim sif";
+      lastError = message;
+      await db.runAsync(
+        "update shifts set sync_status = 'error', sync_error = ? where id = ?",
+        [message, shift.id]
+      );
+      failed += 1;
+    }
+  }
+
+  return { sent, failed, remaining: await countUnsentShifts(db), lastError };
 }
 
 /**

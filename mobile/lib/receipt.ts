@@ -449,6 +449,10 @@ export interface ShiftReport {
   modalAwal: number;
   tunai: number;
   nonTunai: number;
+  /** Rincian nonTunai per kanal — lihat PAYMENT_CHANNELS di lib/types.ts. */
+  qris: number;
+  transfer: number;
+  kartu: number;
   refund: number;
   /** Refund atas order tunai saja — dasar penghitungan Kas Seharusnya. */
   refundTunai: number;
@@ -555,8 +559,15 @@ export function renderShiftText(report: ShiftReport, shop: ReceiptShop): string 
   lines.push(divider);
 
   lines.push(pair("Modal Awal", formatRupiah(report.modalAwal)));
+  // Rincian per kanal, bukan Tunai/Non Tunai berdua saja: pemilik yang
+  // membaca kertas ini ingin tahu berapa lewat QRIS lawan Transfer, bukan
+  // cuma "bukan tunai". qris+transfer+kartu selalu sama dengan nonTunai
+  // (db/shift.ts, shiftTotals) — dijaga di sumbernya, tidak dijumlah ulang
+  // di sini.
   lines.push(pair("Tunai", formatRupiah(report.tunai)));
-  lines.push(pair("Non Tunai", formatRupiah(report.nonTunai)));
+  lines.push(pair("QRIS", formatRupiah(report.qris)));
+  lines.push(pair("Transfer", formatRupiah(report.transfer)));
+  lines.push(pair("Kartu", formatRupiah(report.kartu)));
   lines.push(divider);
 
   lines.push(pair("Total Penerimaan", formatRupiah(penerimaan)));

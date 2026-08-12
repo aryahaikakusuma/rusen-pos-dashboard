@@ -20,7 +20,7 @@
 
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 12;
 
 /** enum Postgres tidak ada di SQLite, jadi TEXT + CHECK. */
 const V1 = `
@@ -455,6 +455,118 @@ create index orders_uji_idx on orders (created_at desc) where is_test_data = 1;
 `;
 
 /**
+ * Kirim sif ke server — cerminan dari supabase/migrations/0029_shift_kas.sql.
+ *
+ * Mengikuti pola `sync_status`/`sync_error` yang sudah ada di `orders` (V1):
+ * TEXT + CHECK, bukan enum, dan indeks parsial yang sama seperti
+ * `orders_sync_idx`.
+ *
+ * BACKFILL WAJIB, dan arahnya SATU SISI: sif yang sudah tertutup sebelum
+ * kolom ini ada tidak pernah dikirim, dan struknya sudah tercetak. Menandai
+ * semuanya 'pending' akan membanjiri server dengan sif historis yang dihitung
+ * di bawah formula lama begitu pengguna memutakhirkan aplikasi — sif itu
+ * sengaja dikecualikan, bukan terlewat. Sif yang masih terbuka (`closed_at`
+ * null) tetap memakai bawaan 'pending' apa adanya: ia akan berhak dikirim
+ * begitu ditutup, bukan sekarang.
+ *
+ * `cash_movements` TIDAK mendapat kolom sync sendiri — ia selalu ikut
+ * terkirim di dalam payload sif induknya (lihat header 0029), tidak pernah
+ * dilacak terpisah.
+ */
+const V9 = `
+alter table shifts add column sync_status text not null default 'pending' check (sync_status in ('pending','synced','error'));
+alter table shifts add column sync_error  text;
+
+update shifts set sync_status = 'synced' where closed_at is not null;
+
+create index shifts_sync_idx on shifts (sync_status) where sync_status <> 'synced';
+`;
+
+/**
+ * Label sif — "pagi" atau "sore", dua sif per hari yang sudah berlaku di toko.
+ * Nullable, sama alasannya dengan V5/V6: sif yang dibuka sebelum kolom ini ada
+ * tidak pernah punya nilainya, dan `null` di situ jujur — mengarang salah satu
+ * dari keduanya untuk baris lama akan mengatakan sesuatu yang tidak pernah
+ * benar-benar dipilih kasir saat itu.
+ */
+const V10 = `
+alter table shifts add column label text check (label is null or label in ('pagi', 'sore'));
+`;
+
+/**
+ * Kanal bayar rinci — cerminan dari supabase/migrations/0030_metode_pembayaran.sql.
+ *
+ * KOLOM BARU, BUKAN PELEBARAN `payment_method`. `payment_method` sudah punya
+ * CHECK sejak V1 (`in ('cash','non_cash')`), dan SQLite tidak bisa melonggarkan
+ * CHECK tanpa membangun ulang seluruh tabel `orders` — operasi yang sudah
+ * sekali ditolak di V2 justru karena risikonya terhadap histori order di
+ * perangkat yang sudah beredar. `payment_channel` berdiri di sampingnya:
+ * `payment_method` tetap satu-satunya sumber "masuk laci atau tidak" (dipakai
+ * shiftTotals, tidak disentuh sama sekali oleh migrasi ini), dan kolom baru
+ * ini menambah rincian kanal DI ATASNYA untuk rincian struk.
+ *
+ * BACKFILL: setiap order lunas historis sudah PASTI punya `payment_method`
+ * (constraint `paid_fields_consistent` sejak V1), jadi ini bukan kasus "order
+ * tanpa metode sama sekali". Yang di-backfill adalah PEMETAAN ke kanal yang
+ * lebih rinci: 'cash' -> 'cash' apa adanya, itu bukan tebakan. 'non_cash'
+ * TIDAK dipetakan ke 'transfer' — layar Pelunasan lama memang hanya punya tab
+ * "Transfer" untuk non tunai, tapi kanal SEBENARNYA setiap transaksi lama
+ * (QRIS lewat aplikasi pihak ketiga yang dicatat kasir sebagai "Transfer",
+ * transfer bank sungguhan, dll) tidak pernah tersimpan di mana pun — itu
+ * tebakan permanen begitu ditulis. 'non_cash' -> 'non_cash_legacy': nilai
+ * khusus data historis, cerminan persis dari supabase/migrations/
+ * 0030_metode_pembayaran.sql, bukan sesuatu yang bisa dipilih kasir (lihat
+ * PAYMENT_CHANNELS di lib/types.ts — nilai ini sengaja tidak ada di situ).
+ *
+ * Nilai ini TIDAK PERNAH muncul di struk Tutup Kasir: db/shift.ts hanya
+ * menjumlah order yang paid_at-nya jatuh dalam jendela sif yang SEDANG
+ * berjalan, dan setiap order baru sejak migrasi ini selalu mendapat kanal
+ * sungguhan lewat app/pay.tsx. Baris ini murni menjaga kolom
+ * payment_channel tetap jujur untuk order lama, seandainya ada layar lain
+ * kelak yang membacanya langsung.
+ */
+const V11 = `
+alter table orders add column payment_channel text check (payment_channel is null or payment_channel in ('cash', 'qris', 'transfer', 'card', 'non_cash_legacy'));
+
+update orders
+set payment_channel = case payment_method
+  when 'cash' then 'cash'
+  when 'non_cash' then 'non_cash_legacy'
+  else null
+end
+where payment_method is not null;
+`;
+
+/**
+ * Kategori kas + koreksi via entri lawan arah — cerminan dari
+ * supabase/migrations/0029_shift_kas.sql (yang belum diterapkan ke database
+ * manapun, jadi diedit langsung di sana alih-alih migrasi Postgres terpisah).
+ *
+ * `category` NULLABLE: entri yang dicatat sebelum kolom ini ada (sudah
+ * beredar di HP sejak V6/2026-08-02) tidak pernah memilihnya, dan `null` di
+ * situ jujur — sama alasannya dengan `shifts.label` di V10. Validasi
+ * "kategori cocok arahnya" ada di recordCashMovement (db/cash.ts), bukan di
+ * CHECK: itu aturan lintas kolom, dan pesan CHECK gagal tidak bisa dibaca
+ * kasir.
+ *
+ * `reverses_id` menggantikan `voided_at` sebagai cara mengoreksi entri salah:
+ * baris baru berarah kebalikan, merujuk id aslinya, dan KEDUANYA tetap
+ * terhitung serta tercetak — bukan disembunyikan. Kolom `voided_at` tidak
+ * dibuang dari skema (entri yang sudah dibatalkan lewat versi lama harus
+ * tetap keluar dari total persis seperti saat itu — lihat filternya di
+ * cashTotals/shiftCashMovements), hanya fungsi yang menulisinya
+ * (`voidCashMovement`) yang dibuang; tidak ada jalur baru yang menulisinya
+ * lagi.
+ */
+const V12 = `
+alter table cash_movements add column category text check (category is null or category in (
+  'bahan', 'ongkos_kirim', 'listrik', 'kasbon', 'setoran_pemilik',
+  'tambahan_modal', 'pengembalian_kasbon', 'lain_lain'
+));
+alter table cash_movements add column reverses_id text;
+`;
+
+/**
  * Dipanggil lewat prop `onInit` milik SQLiteProvider. Naikkan DATABASE_VERSION
  * dan tambahkan blok `if` baru untuk setiap perubahan skema — tablet yang sudah
  * terpasang harus ikut naik versi, bukan dipasang ulang dari nol.
@@ -513,6 +625,26 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   if (version === 7) {
     await db.execAsync(V8);
     version = 8;
+  }
+
+  if (version === 8) {
+    await db.execAsync(V9);
+    version = 9;
+  }
+
+  if (version === 9) {
+    await db.execAsync(V10);
+    version = 10;
+  }
+
+  if (version === 10) {
+    await db.execAsync(V11);
+    version = 11;
+  }
+
+  if (version === 11) {
+    await db.execAsync(V12);
+    version = 12;
   }
 
   await db.execAsync(`pragma user_version = ${DATABASE_VERSION}`);

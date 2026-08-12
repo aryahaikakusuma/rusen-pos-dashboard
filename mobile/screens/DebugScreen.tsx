@@ -396,10 +396,10 @@ async function runSelfTest(
     () =>
       payOrder(db, {
         orderId,
-        method: "cash",
+        channel: "cash",
         amountReceived: 1,
         employeeId,
-        taxStatus: "taxable",
+        taxStatus: "taxable",
       })
   );
 
@@ -430,10 +430,10 @@ async function runSelfTest(
 
     await payOrder(db, {
       orderId,
-      method: "cash",
+      channel: "cash",
       amountReceived: received,
       employeeId,
-      taxStatus: "taxable",
+      taxStatus: "taxable",
     });
 
     const paid = await db.getFirstAsync<{
@@ -480,10 +480,10 @@ async function runSelfTest(
     );
     await payOrder(db, {
       orderId,
-      method: "cash",
+      channel: "cash",
       amountReceived: 999_999,
       employeeId,
-      taxStatus: "taxable",
+      taxStatus: "taxable",
     });
     const sesudah = await db.getFirstAsync<{ total: number; tax_amount: number }>(
       "select total, tax_amount from orders where id = ?",
@@ -523,7 +523,7 @@ async function runSelfTest(
     });
     await payOrder(db, {
       orderId: bebas,
-      method: "non_cash",
+      channel: "transfer",
       amountReceived: null,
       employeeId,
       taxStatus: "exempt",
@@ -585,10 +585,10 @@ async function runSelfTest(
     });
     await payOrder(db, {
       orderId: oid,
-      method: "non_cash",
+      channel: "transfer",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
+      taxStatus: "taxable",
     });
 
     const sebelum = await db.getFirstAsync<{
@@ -665,10 +665,10 @@ async function runSelfTest(
     });
     await payOrder(db, {
       orderId: oid,
-      method: "non_cash",
+      channel: "transfer",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
+      taxStatus: "taxable",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",
@@ -718,10 +718,10 @@ async function runSelfTest(
     });
     await payOrder(db, {
       orderId: oid,
-      method: "non_cash",
+      channel: "transfer",
       amountReceived: null,
       employeeId,
-      taxStatus: "exempt",
+      taxStatus: "exempt",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",
@@ -752,10 +752,10 @@ async function runSelfTest(
     });
     await payOrder(db, {
       orderId: oid,
-      method: "non_cash",
+      channel: "transfer",
       amountReceived: null,
       employeeId,
-      taxStatus: "taxable",
+      taxStatus: "taxable",
     });
     const item = await db.getFirstAsync<{ id: string }>(
       "select id from order_items where order_id = ?",
