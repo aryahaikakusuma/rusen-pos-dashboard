@@ -929,6 +929,41 @@ the shift must stay open when printing fails.
 What this does *not* do is make the gate structural. A new write added tomorrow is unguarded
 unless somebody remembers `useGateShift()`; nothing but convention enforces it.
 
+## Pelunasan dua tingkat, dan polesan Kas Masuk/Keluar ✅ (mobile only; verified on device)
+
+Three small, independently-shipped changes to screens introduced above, each pushed and
+published via OTA the same day.
+
+**`pay.tsx` — the four-way channel picker split into two tiers.** Tunai/Non Tunai is now the
+first choice (tabs), and only when Non Tunai is active does a second row of QRIS/Kartu/Transfer
+appear. First cut rendered that second row as small tab-style pressables to match the first row;
+Heika asked for it back as card buttons "seperti dulu", so it now reuses the same `Button` +
+`methodRow`/`methodButton`/`cashActive` styles the original four-card layout used. Neither
+change touches `PaymentChannel`, `PAYMENT_CHANNELS`, or `paymentMethodFor` — the client still
+never sets `payment_method` directly, and `PaymentChannelStored`'s `non_cash_legacy` stays
+unreachable because `PAYMENT_CHANNELS` (what renders) never included it.
+
+**Kas Masuk/Keluar category buttons — font size, not layout.** `choiceWrap`'s three-column grid
+(`flexBasis: "30%"`) wraps long labels like "Setoran ke Pemilik" and "Pembelian Bahan" mid-word
+at the default `actionButton` (18px) label size. First attempt dropped to `textStyles.bodyStrong`
+(16px) — insufficient, confirmed by a device screenshot still showing "Pemb" / "elian" / "Bahan"
+split across three lines. Second attempt combined `textStyles.caption` (14px, the smallest named
+size in `typography.ts`) with `fontFamily.medium` to keep some visual weight — smallest available
+token-only lever per the standing "no raw numbers, no new tokens" constraint. No report of
+continued wrapping since. If it recurs, the font-size lever is exhausted and the fix has to be
+layout (e.g. a two-column grid), not typography.
+
+**"Pembelian Bahan" renamed to "Stok".** Display label only, in both
+`CASH_CATEGORIES_KELUAR` and `CASH_CATEGORY_LABELS` (`mobile/db/cash.ts`). The stored
+`CashCategory` value stays `"bahan"` — renaming a label is presentation-only, same reasoning as
+product `name` vs `product_code` elsewhere in this document. Grepped for the old string
+afterward; no other reference existed.
+
+Verified without a device: `npm run typecheck` after each change. Verified on a device: the
+mid-word wrap defect itself, via a screenshot Heika sent — the fix that followed has not been
+re-confirmed on-device, only reasoned from the same token ladder that fixed the first, smaller
+wrap.
+
 ## Step 7 — Printer integration ✅ (paper comes out of the printer)
 
 **A receipt has been printed on the real printer from the real app.** `EscposBluetooth:
