@@ -370,31 +370,25 @@ export default function PayScreen() {
           })}
         </View>
 
+        {/* Tingkat 2 dirender sebagai kartu Button, bukan tab kecil seperti
+            tingkat 1 — ini bentuk aslinya sebelum jadi dua tingkat, dan
+            pemilik memintanya kembali: QRIS/Kartu/Transfer ditekan sambil
+            menyerahkan HP ke pelanggan, jadi sasaran sentuhnya sebesar tombol
+            lain di layar ini, bukan seukuran tab. */}
         {channel !== "cash" ? (
-          <View style={styles.tabRow}>
+          <View style={styles.methodRow}>
             {PAYMENT_CHANNELS.filter(({ value }) => value !== "cash").map(
               ({ value, label }) => (
-                <Pressable
+                <Button
                   key={value}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: channel === value }}
+                  label={label}
                   disabled={submitting}
+                  style={[
+                    styles.methodButton,
+                    channel === value && styles.cashActive,
+                  ]}
                   onPress={() => setChannel(value)}
-                  style={styles.tab}>
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      channel === value && styles.tabLabelActive,
-                    ]}>
-                    {label}
-                  </Text>
-                  <View
-                    style={[
-                      styles.tabUnderline,
-                      channel === value && styles.tabUnderlineActive,
-                    ]}
-                  />
-                </Pressable>
+                />
               )
             )}
           </View>

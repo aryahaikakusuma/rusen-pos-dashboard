@@ -26,6 +26,7 @@ import { useGateShift, useShift } from "../lib/shift-context";
 import { formatRupiah } from "../lib/types";
 import {
   colors,
+  fontFamily,
   radius,
   semantic,
   spacing,
@@ -466,11 +467,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   choiceWrap: { flexGrow: 1, flexBasis: "30%" },
-  // Button.label bawaan pakai textStyles.actionButton (18px semibold), yang
-  // membungkus "Setoran ke Pemilik" dan "Lain-lain" di tengah kata pada layar
-  // kasir — token satu tingkat lebih kecil (bodyStrong, 16px) cukup untuk
-  // memutus baris di spasi, bukan di tengah huruf.
-  choiceLabel: { ...textStyles.bodyStrong },
+  // Button.label bawaan pakai textStyles.actionButton (18px semibold). Grid
+  // tiga kolom membuat tiap kartu sempit, jadi bahkan bodyStrong (16px) masih
+  // memutus "Pembelian" di tengah huruf ("Pemb" / "elian") pada perangkat
+  // nyata — caption (14px) adalah gaya teks terkecil yang sudah didefinisikan
+  // di theme/typography.ts, dan di situ barulah tiap kata utuh pindah baris
+  // sendiri alih-alih terpotong.
+  choiceLabel: { ...textStyles.caption, fontFamily: fontFamily.medium },
   choiceActive: {
     borderColor: semantic.sidebarActive,
     backgroundColor: semantic.surfaceMuted,
