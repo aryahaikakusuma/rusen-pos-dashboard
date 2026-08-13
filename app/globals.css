@@ -31,17 +31,19 @@
 
   /* ------------------------------------------------------------------
      Dashboard manajer.
-     Palet ini SENGAJA berbeda dari biru primer di atas. DESIGN.md mengunci
-     biru untuk satu tombol aksi utama di layar kasir, supaya di tengah antrean
-     tidak ada dua tombol yang sama-sama menarik jari. Dashboard tidak punya
-     masalah itu: tidak ada transaksi yang bisa dirusak salah pencet, dan
-     layarnya penuh angka yang perlu dibedakan satu sama lain. Warnanya diambil
-     dari mockup dashboard/index.html.
+     Sampai 2026-08-14 palet ini sengaja teal, berbeda dari biru primer di
+     atas — alasannya DESIGN.md mengunci biru untuk satu tombol aksi utama di
+     layar kasir, dan dashboard tidak punya masalah "dua tombol menarik jari"
+     yang sama karena tidak ada transaksi yang bisa dirusak salah pencet.
+     Keputusan sadar Heika mengubahnya balik ke biru primer supaya dashboard
+     dan cashier app konsisten satu palet — lihat DESIGN.md § Warna dashboard
+     manajer. Nilainya menunjuk langsung ke --color-primary-*, bukan hex baru,
+     supaya kedua permukaan tetap satu sumber kebenaran warna.
      ------------------------------------------------------------------ */
-  --color-brand: #04c99e;
-  --color-brand-dark: #00a6a3;
-  --color-brand-soft: #e6faf5;
-  --color-brand-line: #36d4b1;
+  --color-brand: var(--color-primary-600);
+  --color-brand-dark: var(--color-primary-700);
+  --color-brand-soft: var(--color-primary-100);
+  --color-brand-line: var(--color-primary-500);
 
   --color-ink: #1b2321;
   --color-ink-2: #404545;

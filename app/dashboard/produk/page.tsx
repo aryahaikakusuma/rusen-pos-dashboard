@@ -11,6 +11,8 @@ import { angka, rupiah } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import type { Kategori, Produk } from "@/lib/kontrak";
 
+const PER_HALAMAN = [25, 50, 100];
+
 /**
  * Kelola Produk.
  *
@@ -40,6 +42,8 @@ export default function KelolaProdukPage() {
   const [sedangDiubah, setSedangDiubah] = useState<Produk | null>(null);
   const [akanDinonaktifkan, setAkanDinonaktifkan] = useState<Produk | null>(null);
   const [menyimpan, setMenyimpan] = useState(false);
+  const [halaman, setHalaman] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   const produk = useMemo(() => data?.produk ?? [], [data]);
   const kategori = useMemo(() => data?.kategori ?? [], [data]);
@@ -55,6 +59,24 @@ export default function KelolaProdukPage() {
           p.code.toLowerCase().includes(kata))
     );
   }, [produk, cari, filterKategori, tampilkanNonaktif]);
+
+  /**
+   * Paginasi di klien, bukan di Postgres — daftar produk sudah dimuat utuh
+   * sekali untuk pencarian instan (lihat `tampil`), jadi tidak ada round-trip
+   * server yang bisa dipotong per halaman. Ini murni membatasi DOM yang
+   * dirender; totalnya (KPI, "N dari M produk") tetap dari `tampil` utuh.
+   */
+  const totalHalaman = Math.max(1, Math.ceil(tampil.length / limit));
+  const halamanAman = Math.min(halaman, totalHalaman);
+  const tampilHalaman = useMemo(
+    () => tampil.slice((halamanAman - 1) * limit, halamanAman * limit),
+    [tampil, halamanAman, limit]
+  );
+
+  function ubahFilter<T>(setter: (v: T) => void, nilai: T) {
+    setter(nilai);
+    setHalaman(1);
+  }
 
   const aktif = produk.filter((p) => p.active);
   const bukanObjek = aktif.filter((p) => !p.kategori_taxable);
@@ -113,13 +135,13 @@ export default function KelolaProdukPage() {
         <div className="flex flex-wrap items-center gap-3">
           <input
             value={cari}
-            onChange={(e) => setCari(e.target.value)}
+            onChange={(e) => ubahFilter(setCari, e.target.value)}
             placeholder="Cari nama atau kode produk…"
             className="border-line focus:border-brand min-w-[200px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
           />
           <select
             value={filterKategori}
-            onChange={(e) => setFilterKategori(e.target.value)}
+            onChange={(e) => ubahFilter(setFilterKategori, e.target.value)}
             className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
           >
             <option value="">Semua kategori</option>
@@ -133,7 +155,7 @@ export default function KelolaProdukPage() {
             <input
               type="checkbox"
               checked={tampilkanNonaktif}
-              onChange={(e) => setTampilkanNonaktif(e.target.checked)}
+              onChange={(e) => ubahFilter(setTampilkanNonaktif, e.target.checked)}
               className="accent-brand"
             />
             Tampilkan yang nonaktif
@@ -200,7 +222,7 @@ export default function KelolaProdukPage() {
                   </Td>
                 </tr>
               ) : (
-                tampil.map((p) => (
+                tampilHalaman.map((p) => (
                   <tr
                     key={p.id}
                     className={`hover:bg-[#FAFBFB] ${p.active ? "" : "opacity-55"}`}
@@ -250,6 +272,48 @@ export default function KelolaProdukPage() {
             </tbody>
           </table>
         </Gulung>
+
+        {tampil.length > 0 ? (
+          <div className="border-line text-ink-3 flex flex-wrap items-center gap-3 border-t px-4 py-3.5 text-[13px]">
+            <button
+              type="button"
+              disabled={halamanAman <= 1}
+              onClick={() => setHalaman(halamanAman - 1)}
+              className="border-line hover:border-brand cursor-pointer rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹ Sebelumnya
+            </button>
+            <span>
+              Halaman {halamanAman} dari {totalHalaman}
+            </span>
+            <button
+              type="button"
+              disabled={halamanAman >= totalHalaman}
+              onClick={() => setHalaman(halamanAman + 1)}
+              className="border-line hover:border-brand cursor-pointer rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Berikutnya ›
+            </button>
+            <span className="flex-1" />
+            <label className="flex items-center gap-2">
+              <span className="sr-only">Baris per halaman</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setHalaman(1);
+                }}
+                className="border-line cursor-pointer rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold"
+              >
+                {PER_HALAMAN.map((n) => (
+                  <option key={n} value={n}>
+                    {n} / halaman
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
       </Kartu>
 
       {formBuka ? (

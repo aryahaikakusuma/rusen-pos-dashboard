@@ -179,3 +179,87 @@ export interface BalasanKatalog {
   produk: Produk[];
   kategori: Kategori[];
 }
+
+/* ------------------------------------------------------------ kas per shift */
+
+/**
+ * Satu baris per shift — keluaran `laporan_shift` (`0032`).
+ *
+ * `kas_aktual`, `selisih_tersimpan`, dan `selisih_hitung_server` bisa `null`:
+ * shift terbuka tidak punya `kas_fisik`, dan sif lama sebelum V5/V6
+ * `mobile/db/migrations.ts` tidak pernah mengisi `shifts.selisih`. `formula_cocok`
+ * bertiga-nilai dengan alasan yang sama — `null` berarti "tidak diketahui",
+ * BUKAN "diketahui cocok" atau "diketahui menyimpang".
+ */
+export interface BarisShift {
+  shift_id: string;
+  dibuka_pada: string;
+  ditutup_pada: string | null;
+  kasir: string;
+  modal_awal: number;
+  penjualan_tunai: number;
+  kas_masuk: number;
+  kas_keluar: number;
+  refund_tunai: number;
+  kas_seharusnya: number;
+  kas_aktual: number | null;
+  /** Apa adanya dari `shifts.selisih` — angka yang tercetak di struk kasir. */
+  selisih_tersimpan: number | null;
+  /** Dihitung ulang di Postgres, TIDAK dibaca dari `shifts.selisih`. */
+  selisih_hitung_server: number | null;
+  formula_cocok: boolean | null;
+  masih_terbuka: boolean;
+}
+
+/** Satu baris movement — keluaran `detail_kas_shift`. `nominal` sudah bertanda arah. */
+export interface BarisDetailKasShift {
+  waktu: string;
+  jenis: "masuk" | "keluar" | "refund";
+  keterangan: string | null;
+  nomor_order: string | null;
+  kasir: string;
+  nominal: number;
+}
+
+/** Order lunas yang `paid_at`-nya tidak jatuh di jendela shift manapun — `order_yatim`. */
+export interface BarisOrderYatim {
+  order_id: string;
+  table_code: string;
+  waktu: string;
+  total: number;
+  kasir: string;
+  metode_pembayaran: string;
+}
+
+/** Refund yang `created_at`-nya tidak jatuh di jendela shift manapun — `refund_yatim`. */
+export interface BarisRefundYatim {
+  refund_id: string;
+  nomor_order: string;
+  waktu: string;
+  nominal: number;
+  alasan: string | null;
+  kasir: string;
+  metode_pembayaran: string;
+}
+
+export interface BalasanShift {
+  periode: Periode;
+  sertakanTerbuka: boolean;
+  baris: BarisShift[];
+  orderYatim: BarisOrderYatim[];
+  refundYatim: BarisRefundYatim[];
+}
+
+/**
+ * Paginasi di sini TIDAK datang dari argumen fungsi Postgres — `detail_kas_shift`
+ * tidak menerima `p_limit`/`p_offset` seperti `laporan_penjualan_detail`.
+ * `totalBaris` berasal dari header `Content-Range` PostgREST (`count: "exact"`
+ * + `.range()`), bukan dari kolom window. Lihat `lib/laporan.ts`.
+ */
+export interface BalasanDetailKasShift {
+  shiftId: string;
+  halaman: number;
+  limit: number;
+  totalBaris: number;
+  baris: BarisDetailKasShift[];
+}

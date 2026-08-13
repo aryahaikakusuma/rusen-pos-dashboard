@@ -1,9 +1,11 @@
 import type {
   BalasanDetail,
+  BalasanDetailKasShift,
   BalasanHarian,
   BalasanKatalog,
   BalasanProduk,
   BalasanProdukHarian,
+  BalasanShift,
   Periode,
   Produk,
 } from "./kontrak";
@@ -96,6 +98,22 @@ export const Api = {
   produkHarian(periode: Periode, kode: string[]): Promise<BalasanProdukHarian> {
     const daftar = kode.length ? `&kode=${encodeURIComponent(kode.join(","))}` : "";
     return ambil(`/api/laporan/produk-harian?${rentang(periode)}${daftar}`);
+  },
+
+  kasShift(periode: Periode, sertakanTerbuka: boolean): Promise<BalasanShift> {
+    return ambil(
+      `/api/laporan/kas-shift?${rentang(periode)}&terbuka=${sertakanTerbuka ? "1" : "0"}`
+    );
+  },
+
+  detailKasShift(
+    shiftId: string,
+    halaman: number,
+    limit: number
+  ): Promise<BalasanDetailKasShift> {
+    return ambil(
+      `/api/laporan/kas-shift/detail?shift_id=${encodeURIComponent(shiftId)}&halaman=${halaman}&limit=${limit}`
+    );
   },
 
   katalog(): Promise<BalasanKatalog> {

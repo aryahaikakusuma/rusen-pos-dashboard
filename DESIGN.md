@@ -15,6 +15,25 @@ Primary font: Poppins, used throughout the UI (cashier, reports, attendance). No
 - Order status uses semantic colors: awaiting payment = warning (yellow/amber), paid = success (dark green/teal), void = neutral/muted red.
 - Clean background, white/light neutral, without excessive gradients or shadows. Flat surfaces.
 
+### Dashboard manajer (web) — same primary blue as the cashier app
+
+Until 2026-08-14 the manager dashboard (`/dashboard/*` in the root Next.js app) intentionally used
+a separate teal/mint palette instead of the primary blue above. The reasoning at the time: blue was
+reserved for the cashier's one primary action button so nothing competed with it during a rush, and
+the dashboard has no such button to protect — it's read-heavy screens full of numbers that need
+telling apart. That reasoning was sound, but Heika decided the two surfaces should look like one
+product rather than two, so the dashboard now points at the same `--color-primary-*` tokens as the
+cashier app (`app/globals.css`, `--color-brand` and friends resolve to `--color-primary-600` etc.,
+not a separate hex).
+
+**One deliberate exception:** the chart color palette (`WARNA` in `components/dashboard/Grafik.tsx`)
+still uses the old teal hex values for `brand`/`brandGaris`/`brandLembut`, unchanged. Those aren't UI
+chrome — they're series colors in multi-line/bar charts that also use `WARNA.biru` (the same blue as
+the new brand color) as a *different* series in the same chart (e.g. "Penjualan" vs. "Tertagih" in
+Laporan Harian). Repointing them to blue would make two distinct data series visually
+indistinguishable. If the chart palette is ever revisited, it needs its own set of mutually distinct
+colors — simply following the UI chrome's blue will silently break series differentiation.
+
 ## Cashier Layout (main screen)
 
 Three columns:

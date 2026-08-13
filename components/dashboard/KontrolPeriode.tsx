@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
+import type { Periode } from "@/lib/kontrak";
 import { usePeriode } from "@/lib/use-periode";
 import {
   GRANULARITAS,
@@ -53,11 +54,20 @@ import RentangTanggal from "./RentangTanggal";
  */
 export default function KontrolPeriode({
   waktuData,
+  bawaan,
 }: {
   /** Kapan angka yang sedang tampil tiba. `null` selama pengambilan pertama. */
   waktuData: number | null;
+  /**
+   * Rentang bawaan saat query string kosong. `undefined` memakai bawaan
+   * `usePeriode` (awal bulan berjalan) — satu-satunya pemanggil yang
+   * membutuhkan yang lain sejauh ini adalah Kas per Shift (7 hari terakhir).
+   * WAJIB referensi stabil (fungsi di luar komponen), bukan closure baru tiap
+   * render — lihat catatan di `usePeriode`.
+   */
+  bawaan?: () => Periode;
 }) {
-  const { periode, hintGranularitas, setPeriode } = usePeriode();
+  const { periode, hintGranularitas, setPeriode } = usePeriode(bawaan);
   const pathname = usePathname();
 
   /**

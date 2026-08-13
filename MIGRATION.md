@@ -2162,7 +2162,7 @@ CI/Vercel does not have. Prefer lazy client construction (inside the request han
 module scope) over eager singletons where practical, so a missing env var fails one request
 instead of the entire build.
 
-## Riwayat kas per shift — `laporan_shift`, `detail_kas_shift`, `refund_yatim`, `order_yatim` ✅ (Postgres only; frontend belum)
+## Riwayat kas per shift — `laporan_shift`, `detail_kas_shift`, `refund_yatim`, `order_yatim` ✅ (Postgres + frontend; lihat bagian di bawah untuk frontend)
 
 `0032_agregasi_shift_kas.sql` menambah tiga fungsi baca untuk dashboard histori kas per
 shift, pola sama dengan `0027`: baca `shifts`/`cash_movements`/`orders`/`refunds` langsung,
@@ -2201,6 +2201,48 @@ Kedua migrasi diverifikasi dulu di local Docker (parse/creation smoke test lewat
 `ON_ERROR_STOP=1`) sebelum diterapkan ke hosted — local Docker `shifts`/`cash_movements`
 kosong sehingga tidak bisa membuktikan angka, hanya membuktikan SQL-nya valid terhadap
 skema nyata.
+
+## Kas per shift — frontend, lapis-3 selebar lapis-2, dan pemolesan dashboard ✅ (web; belum di-commit)
+
+Frontend untuk histori kas per shift (fungsi Postgres di bagian di atas) landed sebagai
+`app/dashboard/laporan/kas-shift/page.tsx` — tiga lapis (hari → shift → pergerakan kas), status
+"Tidak Diketahui" untuk shift dengan selisih yang belum bisa dibandingkan
+(`formula_cocok === null`), sengaja tidak disamakan dengan "Sesuai".
+
+Audit visual read-only (Playwright/agent-browser, 2026-08-13/14) menemukan `DetailShift`
+(lapis 3, `max-w-2xl`) lebih sempit dari `HariDrawer` di baliknya (lapis 2, `max-w-3xl`) —
+kedua drawer sama-sama right-anchored, jadi lapis 2 nyembul sebagai potongan sempit di kiri
+lapis 3, alih-alih tertutup penuh. **Bukan bug state**: `shiftId` tetap satu `string | null`
+yang di-replace bukan di-push, dan jumlah `[role="dialog"]` di DOM diverifikasi lewat browser
+stabil berayun 1↔2 di berbagai skenario (klik shift lain tanpa menutup, klik baris sama dua
+kali, buka-tutup berulang) — tidak pernah tumbuh jadi 3. Murni lebar dua lapis yang tidak
+disamakan. Diperbaiki dengan menyamakan `max-w-3xl` di kedua lapis, plus breadcrumb "‹ tanggal"
+yang bisa diklik di header `DetailShift` supaya jalan kembali ke lapis 2 terlihat, bukan cuma
+tersirat dari tombol × generik.
+
+Audit yang sama menemukan Kelola Produk dan Laporan Produk merender seluruh baris (309 produk,
+218 varian) sekaligus dalam satu scroll, kontras dengan Detail Penjualan yang sudah paginasi
+Postgres (`.range()` + `count: "exact"`). **Meniru pola itu di sini ditolak dengan sengaja**:
+kedua halaman punya pencarian instan sisi klien atas satu balasan yang sudah dimuat penuh,
+bukan query per halaman — memindahkannya ke server berarti tiap ketikan jadi round-trip
+jaringan, dan pencarian instan yang sudah ada hilang. Paginasi diterapkan di klien saja: hasil
+filter+urut (`tampil`) dipotong per 25/50/100 untuk dirender, sementara KPI/total/tfoot tetap
+menjumlahkan dari data penuh (`produk`/`semua`) — pola yang sama dipakai Detail Penjualan untuk
+kartu KPI-nya, yang sengaja tidak ikut terpotong per halaman.
+
+Warna primer dashboard (`--color-brand` dkk di `app/globals.css`) diganti dari teal
+(`#04c99e`) balik ke biru primer (`--color-primary-600`, sama dengan cashier app) atas
+keputusan sadar Heika, membalik keputusan sebelumnya yang sengaja memisahkan palet dashboard
+dari biru cashier. Lihat `DESIGN.md § Dashboard manajer (web)` untuk alasan lengkap kedua arah
+keputusan itu. **Satu pengecualian sengaja:** palet chart (`WARNA` di
+`components/dashboard/Grafik.tsx`) tetap teal, tidak ikut diganti — dipakai sebagai warna seri
+yang harus beda dari `WARNA.biru` yang sudah dipakai sebagai seri lain di grafik yang sama
+(mis. "Penjualan" vs "Tertagih" di Laporan Harian). Mengganti nilai itu ke biru juga akan
+membuat dua seri data itu jadi tidak bisa dibedakan.
+
+Ketiganya diverifikasi lewat `npx tsc --noEmit` dan `npx eslint` (bersih, 0 error, 0 warning
+selain `globals.css` yang memang di luar cakupan eslint) — **belum diverifikasi visual di
+browser** setelah perubahan warna dan lebar panel.
 
 ## Step 8 — Device and store builds
 

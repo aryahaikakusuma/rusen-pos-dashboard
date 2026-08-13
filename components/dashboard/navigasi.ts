@@ -30,6 +30,7 @@ export const LAPORAN: Tautan[] = [
   },
   { href: "/dashboard/laporan/detail", label: "Detail Penjualan", ikon: "🧾" },
   { href: "/dashboard/laporan/produk", label: "Laporan Produk", ikon: "📦" },
+  { href: "/dashboard/laporan/kas-shift", label: "Kas per Shift", ikon: "💵" },
 ];
 
 export const LAINNYA: Tautan[] = [
@@ -42,6 +43,7 @@ const JUDUL: Record<string, string> = {
   "/dashboard/laporan/harian": "Penjualan per Periode",
   "/dashboard/laporan/detail": "Detail Penjualan",
   "/dashboard/laporan/produk": "Laporan Produk",
+  "/dashboard/laporan/kas-shift": "Kas per Shift",
   "/history": "Histori Transaksi",
 };
 

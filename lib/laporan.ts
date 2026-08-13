@@ -2,9 +2,13 @@ import "server-only";
 
 import type {
   BarisDetail,
+  BarisDetailKasShift,
   BarisHarian,
+  BarisOrderYatim,
   BarisProduk,
   BarisProdukHarian,
+  BarisRefundYatim,
+  BarisShift,
 } from "./kontrak";
 import { SEPOTONG_KODE } from "./kontrak";
 import type { Periode } from "./periode";
@@ -166,6 +170,69 @@ function belah<T>(daftar: T[], ukuran: number): T[][] {
     hasil.push(daftar.slice(i, i + ukuran));
   }
   return hasil;
+}
+
+export async function laporanShift(
+  periode: Periode,
+  sertakanTerbuka: boolean
+): Promise<BarisShift[]> {
+  const { data, error } = await db.rpc("laporan_shift", {
+    p_dari: periode.dari,
+    p_sampai: periode.sampai,
+    p_sertakan_terbuka: sertakanTerbuka,
+  });
+  if (error) throw new Error(`laporan_shift gagal: ${error.message}`);
+  return (data ?? []) as BarisShift[];
+}
+
+export async function orderYatim(periode: Periode): Promise<BarisOrderYatim[]> {
+  const { data, error } = await db.rpc("order_yatim", {
+    p_dari: periode.dari,
+    p_sampai: periode.sampai,
+  });
+  if (error) throw new Error(`order_yatim gagal: ${error.message}`);
+  return (data ?? []) as BarisOrderYatim[];
+}
+
+export async function refundYatim(periode: Periode): Promise<BarisRefundYatim[]> {
+  const { data, error } = await db.rpc("refund_yatim", {
+    p_dari: periode.dari,
+    p_sampai: periode.sampai,
+  });
+  if (error) throw new Error(`refund_yatim gagal: ${error.message}`);
+  return (data ?? []) as BarisRefundYatim[];
+}
+
+export interface HasilDetailKasShift {
+  baris: BarisDetailKasShift[];
+  totalBaris: number;
+}
+
+/**
+ * `detail_kas_shift(p_shift_id)` tidak menerima `p_limit`/`p_offset` — beda dari
+ * `laporan_penjualan_detail`, yang membawa paginasinya sendiri sebagai argumen.
+ * Paginasi di sini karena itu dikerjakan lewat `.range()` PostgREST dan
+ * `count: "exact"` untuk `totalBaris`, pola yang sama dipakai `laporanProdukHarian`
+ * untuk mendeteksi pemotongan 1000-baris — bedanya di sana Content-Range dipakai
+ * untuk MENDETEKSI pemotongan, di sini untuk MENGERJAKAN paginasinya.
+ */
+export async function detailKasShift(
+  shiftId: string,
+  limit: number,
+  offset: number
+): Promise<HasilDetailKasShift> {
+  const { data, error, count } = await db
+    .rpc("detail_kas_shift", { p_shift_id: shiftId }, { count: "exact" })
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(`detail_kas_shift gagal: ${error.message}`);
+
+  if (count === null || count === undefined) {
+    throw new Error(
+      "detail_kas_shift: header Content-Range tidak ada, jadi paginasi tidak bisa dipercaya."
+    );
+  }
+
+  return { baris: (data ?? []) as BarisDetailKasShift[], totalBaris: count };
 }
 
 /**

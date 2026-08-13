@@ -22,6 +22,8 @@ import type { BarisProduk } from "@/lib/kontrak";
 
 type Urutan = "omzet" | "terjual" | "lambat";
 
+const PER_HALAMAN = [25, 50, 100];
+
 /**
  * Laporan Produk — satu baris per VARIAN.
  *
@@ -44,6 +46,8 @@ export default function LaporanProdukPage() {
   const { periode } = usePeriode();
   const [cari, setCari] = useState("");
   const [urutan, setUrutan] = useState<Urutan>("omzet");
+  const [halaman, setHalaman] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   const { data, memuat, galat, muatUlang, pada } = useData(
     () => Api.produkLaporan(periode),
@@ -79,6 +83,19 @@ export default function LaporanProdukPage() {
 
     return [...hasil].sort(urut[urutan]);
   }, [semua, cari, urutan]);
+
+  /**
+   * Paginasi di klien — sama alasannya seperti Kelola Produk: seluruh baris
+   * periode datang dalam satu balasan (lihat catatan di atas), jadi tidak ada
+   * yang bisa dipotong di Postgres. Totals (KPI, Pareto, tfoot) tetap dari
+   * `semua`/`tampil` utuh, cuma tabelnya yang dibatasi per halaman.
+   */
+  const totalHalaman = Math.max(1, Math.ceil(tampil.length / limit));
+  const halamanAman = Math.min(halaman, totalHalaman);
+  const tampilHalaman = useMemo(
+    () => tampil.slice((halamanAman - 1) * limit, halamanAman * limit),
+    [tampil, halamanAman, limit]
+  );
 
   /**
    * Berapa varian yang menyumbang 80% omzet. Dihitung atas SELURUH baris
@@ -256,13 +273,19 @@ export default function LaporanProdukPage() {
       <div className="no-print mb-5 flex flex-wrap items-center gap-3">
         <input
           value={cari}
-          onChange={(e) => setCari(e.target.value)}
+          onChange={(e) => {
+            setCari(e.target.value);
+            setHalaman(1);
+          }}
           placeholder="Cari nama, kode, atau kategori…"
           className="border-line focus:border-brand min-w-[240px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
         />
         <select
           value={urutan}
-          onChange={(e) => setUrutan(e.target.value as Urutan)}
+          onChange={(e) => {
+            setUrutan(e.target.value as Urutan);
+            setHalaman(1);
+          }}
           className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
         >
           <option value="omzet">Urutkan: Omzet tertinggi</option>
@@ -362,7 +385,7 @@ export default function LaporanProdukPage() {
                   </Td>
                 </tr>
               ) : (
-                tampil.map((b) => (
+                tampilHalaman.map((b) => (
                   <tr key={b.product_code} className="hover:bg-[#FAFBFB]">
                     <Td className="text-ink-3 text-xs">{b.product_code}</Td>
                     <Td>
@@ -403,6 +426,48 @@ export default function LaporanProdukPage() {
             </tfoot>
           </table>
         </Gulung>
+
+        {tampil.length > 0 ? (
+          <div className="border-line text-ink-3 no-print flex flex-wrap items-center gap-3 border-t px-4 py-3.5 text-[13px]">
+            <button
+              type="button"
+              disabled={halamanAman <= 1}
+              onClick={() => setHalaman(halamanAman - 1)}
+              className="border-line hover:border-brand cursor-pointer rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹ Sebelumnya
+            </button>
+            <span>
+              Halaman {halamanAman} dari {totalHalaman}
+            </span>
+            <button
+              type="button"
+              disabled={halamanAman >= totalHalaman}
+              onClick={() => setHalaman(halamanAman + 1)}
+              className="border-line hover:border-brand cursor-pointer rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Berikutnya ›
+            </button>
+            <span className="flex-1" />
+            <label className="flex items-center gap-2">
+              <span className="sr-only">Baris per halaman</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setHalaman(1);
+                }}
+                className="border-line cursor-pointer rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold"
+              >
+                {PER_HALAMAN.map((n) => (
+                  <option key={n} value={n}>
+                    {n} / halaman
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
       </Kartu>
       </AreaData>
 

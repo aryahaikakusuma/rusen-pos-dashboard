@@ -27,7 +27,13 @@ export function periodeBawaan(): Periode {
   return { dari: `${hariIni.slice(0, 8)}01`, sampai: hariIni };
 }
 
-export function usePeriode(): {
+/**
+ * `bawaan` menimpa rentang default saat query string kosong — dipakai Kas per
+ * Shift, yang bawaannya "7 hari terakhir" alih-alih awal bulan berjalan. Tidak
+ * mengubah pemanggil yang sudah ada: parameter opsional, dan tanpanya
+ * perilakunya identik dengan sebelumnya.
+ */
+export function usePeriode(bawaan: () => Periode = periodeBawaan): {
   periode: Periode;
   /**
    * Granularitas tombol yang barusan ditekan, atau `null` kalau rentang saat
@@ -55,7 +61,12 @@ export function usePeriode(): {
     if (dari && sampai && POLA.test(dari) && POLA.test(sampai) && dari <= sampai) {
       return { dari, sampai };
     }
-    return periodeBawaan();
+    return bawaan();
+    // `bawaan` sengaja tidak masuk daftar dependensi: pemanggil yang tidak
+    // memoisasinya (fungsi baru tiap render) tidak boleh membuat efek ini
+    // berjalan ulang — nilai yang dihasilkan `bawaan()` deterministik untuk
+    // hari yang sama, jadi mengabaikannya di sini aman.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dari, sampai]);
 
   const hintGranularitas = useMemo<Granularitas | null>(() => {
