@@ -2162,6 +2162,46 @@ CI/Vercel does not have. Prefer lazy client construction (inside the request han
 module scope) over eager singletons where practical, so a missing env var fails one request
 instead of the entire build.
 
+## Riwayat kas per shift — `laporan_shift`, `detail_kas_shift`, `refund_yatim`, `order_yatim` ✅ (Postgres only; frontend belum)
+
+`0032_agregasi_shift_kas.sql` menambah tiga fungsi baca untuk dashboard histori kas per
+shift, pola sama dengan `0027`: baca `shifts`/`cash_movements`/`orders`/`refunds` langsung,
+tanpa tabel ringkasan sendiri, `security definer` dengan `revoke all ... from public, anon,
+authenticated` eksplisit sebelum `grant ... to service_role` (anon key ada di APK).
+
+Dua keputusan yang menyimpang dari draf instruksi awal, dicatat di komentar migrasinya
+sendiri bukan diselaraskan diam-diam: `kas_masuk`/`kas_keluar` di `laporan_shift` hanya
+menjumlahkan `cash_movements` bermetode `'cash'`, mengikuti `kasSeharusnya` di
+`receipt.ts` — bukan seluruh arah tanpa syarat metode. Dan `laporan_shift` mengembalikan
+**dua** kolom selisih yang sengaja tidak diselaraskan satu sama lain: `selisih_tersimpan`
+(apa adanya dari `shifts.selisih`, yang dihitung device dan tercetak di struk) dan
+`selisih_hitung_server` (dihitung ulang total independen dari `orders`/`refunds`/
+`cash_movements` mentah). `formula_cocok` membandingkan keduanya dan sengaja `null` —
+bukan `false` — kalau salah satu sisi tidak diketahui, supaya "belum bisa dibandingkan"
+tidak tertukar dengan "dibandingkan, dan menyimpang".
+
+Diverifikasi terhadap shift nyata di hosted (kasir "Pagi", 2026-08-13 06:22–14:32 WIB):
+jendela WIB terbukti benar secara empiris (shift muncul saat query tanggal 13, kosong saat
+tanggal 12 — bukan cuma dibaca dari kode), `penjualan_tunai` (1.079.500) cocok persis
+dengan penjumlahan manual 19 order tunai `paid` dalam jendela shift, dan `formula_cocok`
+bernilai `true`.
+
+Verifikasi manual itu juga menemukan celah yang tidak dilingkupi draf instruksi awal: dua
+order tunai dengan `paid_at` **setelah** `closed_at` shift ini, tanpa shift lain yang
+jendelanya mencakup waktu itu (kasir menutup sif lalu tetap melayani transaksi sebelum
+sif berikutnya dibuka/sync). Order semacam itu tidak muncul di laporan per-shift manapun —
+gejala yang sama dengan refund yatim yang sudah ditangani `refund_yatim`, hanya sisi order
+belum punya pasangannya. `0033_order_yatim.sql` menambahkan `order_yatim`, pola identik
+`refund_yatim`: tidak dibatasi `payment_method`, kolom metode ditampilkan sebagai info
+supaya dashboard yang menyaring relevansinya ke rekonsiliasi kas, bukan fungsi ini yang
+menyaring duluan. Diuji dengan shift yang sama: kedua order yatim yang ditemukan manual
+muncul persis, tidak lebih tidak kurang.
+
+Kedua migrasi diverifikasi dulu di local Docker (parse/creation smoke test lewat psql
+`ON_ERROR_STOP=1`) sebelum diterapkan ke hosted — local Docker `shifts`/`cash_movements`
+kosong sehingga tidak bisa membuktikan angka, hanya membuktikan SQL-nya valid terhadap
+skema nyata.
+
 ## Step 8 — Device and store builds
 
 `preview` for installable tablet tests, `production` for the final sideloaded build.
