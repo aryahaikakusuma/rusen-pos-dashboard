@@ -2244,6 +2244,60 @@ Ketiganya diverifikasi lewat `npx tsc --noEmit` dan `npx eslint` (bersih, 0 erro
 selain `globals.css` yang memang di luar cakupan eslint) — **belum diverifikasi visual di
 browser** setelah perubahan warna dan lebar panel.
 
+## PBJT per produk — override dari kategori ✅ (Postgres + web + mobile; live di hosted dan OTA)
+
+0019 sengaja menaruh status kena-PBJT di `categories.taxable`, dengan alasan eksplisit "sifat
+barangnya, bukan pilihan" — rokok bukan objek PBJT karena rokok, bukan karena ada yang
+menandainya begitu. Halaman Kelola Produk bahkan sempat menampilkan kolom itu read-only dengan
+komentar yang menjelaskan kenapa ia sengaja tidak bisa diubah per produk.
+
+Heika mematahkan itu dengan sengaja: kebutuhan konkretnya produk promo (mis. Rp17.000, jadi
+Rp18.700 kalau kena PBJT) yang butuh status pajak sendiri, lepas dari kategori tempat ia
+didaftarkan, tanpa harus membuat kategori baru tiap kali ada satu produk yang berbeda. Sebelum
+diimplementasikan, trade-off ini dikonfirmasi eksplisit ke Heika (lewat `AskUserQuestion`) —
+termasuk konsekuensi bahwa `create_order`/`append_to_order` Postgres perlu diubah dan mobile perlu
+menduplikasi perubahan yang sama di SQLite lokalnya. Heika tetap memilih checkbox per produk.
+
+**Desain: `products.taxable` sekarang otoritatif, `categories.taxable` jadi saran.** Migrasi
+`0034_produk_taxable.sql` menambah kolom `products.taxable boolean not null default true`,
+di-backfill dari kategori masing-masing produk (`update products p set taxable = c.taxable from
+categories c where c.id = p.category_id`) supaya produk lama TIDAK berubah perilaku sama sekali.
+`create_order` dan `append_to_order` diubah membaca `p.taxable`/`v_product.taxable` langsung,
+bukan lagi lewat join ke `categories` — snapshot ke `order_items.taxable` (0019) tidak disentuh,
+jadi order lama dan refund tetap membaca apa yang sudah tersimpan di baris itemnya sendiri.
+`void_order_item`/`pay_order` tidak perlu diubah karena keduanya sudah membaca dari
+`order_items.taxable` yang sudah snapshot.
+
+**Tiga mesin, seperti biasa.** Dashboard: `lib/kontrak.ts`/`lib/produk.ts` menambah field
+`taxable` di samping `kategori_taxable` yang tetap dipertahankan sebagai saran nilai awal;
+`app/dashboard/produk/page.tsx` dapat checkbox "Kena PBJT" di form tambah/ubah, dihitung sekali
+dari kategori terpilih saat form dibuka (bukan disinkron ulang tiap ganti kategori, supaya
+toggle yang sudah disentuh pengguna tidak diam-diam tertimpa). Mobile: `mobile/db/migrations.ts`
+V13 menambah kolom yang sama di SQLite lokal dan — mengikuti persis pola V7 — menghapus
+`catalog_pulled_at` supaya katalog wajib ditarik ulang setelah update terpasang, kalau tidak
+produk lama di ponsel tetap kena pajak selamanya walau server sudah bilang bebas, tanpa satu pun
+tanda. `mobile/db/catalog.ts` menarik kolom baru dengan `?? true` (bawaan aman kalau hosted
+belum menjalankan migrasinya), dan `mobile/db/orders.ts` `loadProduct()` disederhanakan — tidak
+perlu `left join categories` lagi karena nilainya sudah ada di baris produk itu sendiri.
+`supabase/seed.sql` dapat backfill yang sama persis di akhir berkas, supaya instalasi baru lewat
+seed mendarat di keadaan yang sama dengan basis data yang naik lewat migrasi satu-satu.
+
+**Verifikasi sebelum deploy.** Migrasi dijalankan dua kali di Postgres lokal — kedua kalinya
+`UPDATE 0` dan kolom di-skip, idempoten. Backfill diperiksa manual: Rokok 20 produk seluruhnya
+bebas pajak, 22 kategori lain seluruhnya kena — persis sama dengan sebelum migrasi.
+`npm run periksa:laporan` — 38/38 uji cocok, tiga laporan dan tiga XLSX identik dengan sebelum
+perubahan (diharapkan: `order_items.taxable` yang dibaca laporan tidak tersentuh sama sekali).
+`npx tsc --noEmit` (root) dan `npm run typecheck` + `npm run periksa:varian` (mobile) bersih.
+
+**Deploy**: `npx supabase db push` ke hosted (dikonfirmasi cocok lewat `migration list`
+sebelum dan sesudah), lalu OTA (`eas update --branch production`, runtime version 3 — perubahan
+JS saja, tidak menyentuh native) dengan bundel diverifikasi (host Supabase muncul di `.hbc`,
+`undefined/rest` nol). Konsekuensi operasional dari V13 menghapus `catalog_pulled_at`: kasir yang
+shift-nya sedang berjalan saat OTA terpasang perlu tutup-buka aplikasi dua kali (sekali untuk
+`expo-updates` mengambil bundel baru di latar belakang, sekali lagi untuk memakainya — bawaan
+`checkOnLaunch: ALWAYS`) supaya katalognya ikut ditarik ulang dan status pajak per produk yang
+baru terbaca benar.
+
 ## Step 8 — Device and store builds
 
 `preview` for installable tablet tests, `production` for the final sideloaded build.
