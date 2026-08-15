@@ -20,7 +20,7 @@
 
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 12;
+const DATABASE_VERSION = 13;
 
 /** enum Postgres tidak ada di SQLite, jadi TEXT + CHECK. */
 const V1 = `
@@ -567,6 +567,20 @@ alter table cash_movements add column reverses_id text;
 `;
 
 /**
+ * PBJT per produk — cerminan dari supabase/migrations/0034_produk_taxable.sql.
+ *
+ * Sama seperti V7: menghapus `catalog_pulled_at` supaya katalog wajib ditarik
+ * ulang begitu update ini terpasang. Tanpa baris itu, produk lama di perangkat
+ * ini tetap `1` (kena pajak) selamanya walau di server sudah ditandai bebas
+ * pajak, dan tidak ada satu pun tanda bahwa itu terjadi.
+ */
+const V13 = `
+alter table products add column taxable integer not null default 1;
+
+delete from app_state where key = 'catalog_pulled_at';
+`;
+
+/**
  * Dipanggil lewat prop `onInit` milik SQLiteProvider. Naikkan DATABASE_VERSION
  * dan tambahkan blok `if` baru untuk setiap perubahan skema — tablet yang sudah
  * terpasang harus ikut naik versi, bukan dipasang ulang dari nol.
@@ -645,6 +659,11 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   if (version === 11) {
     await db.execAsync(V12);
     version = 12;
+  }
+
+  if (version === 12) {
+    await db.execAsync(V13);
+    version = 13;
   }
 
   await db.execAsync(`pragma user_version = ${DATABASE_VERSION}`);

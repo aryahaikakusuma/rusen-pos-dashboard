@@ -31,7 +31,13 @@ export async function pullCatalog(
     supabase
       .from("categories")
       .select("id, outlet_id, code, name, sort_order, active, taxable"),
-    supabase.from("products").select("id, outlet_id, category_id, code, name, price, active"),
+    // `taxable` sejak 0034 otoritatif untuk pajak, lepas dari kategorinya —
+    // sama alasannya dengan categories.taxable di atas: perangkat menghitung
+    // pajak saat offline, jadi nilainya harus ikut ditarik, bukan diasumsikan
+    // sama dengan kategori.
+    supabase
+      .from("products")
+      .select("id, outlet_id, category_id, code, name, price, active, taxable"),
     // Tarif PBJT ikut ditarik di sini supaya perangkat bisa menghitung pajak
     // saat offline. 0012 memberi hak SELECT tingkat kolom pada outlets —
     // alamat outlet tidak ikut turun.
@@ -82,7 +88,7 @@ export async function pullCatalog(
     await upsertChunked(
       txn,
       "products",
-      ["id", "outlet_id", "category_id", "code", "name", "price", "active"],
+      ["id", "outlet_id", "category_id", "code", "name", "price", "active", "taxable"],
       productRows.map((p) => [
         p.id,
         p.outlet_id,
@@ -91,6 +97,10 @@ export async function pullCatalog(
         p.name,
         p.price,
         p.active ? 1 : 0,
+        // `?? true`: server yang belum menjalankan 0034 tidak mengirim kolom
+        // ini sama sekali. Kena pajak adalah bawaan yang aman, sama pola
+        // dengan categories.taxable di atas.
+        (p.taxable ?? true) ? 1 : 0,
       ])
     );
 

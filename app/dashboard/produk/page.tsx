@@ -22,10 +22,11 @@ const PER_HALAMAN = [25, 50, 100];
  *   nama, kategori, harga, dan aktif. Kolom yang isinya selalu nol hanya
  *   mengundang pertanyaan tiap bulan.
  *
- *   Status pajak per produk — pajak melekat di KATEGORI (`categories.taxable`),
- *   dan itu sifat barangnya, bukan pilihan. Rokok bukan objek PBJT karena rokok,
- *   bukan karena ada yang menandainya begitu. Jadi kolomnya tetap tampil, tapi
- *   baca-saja dan jelas asalnya.
+ *   Status pajak — sejak `0034`, `products.taxable` otoritatif dan bisa diatur
+ *   per produk lewat checkbox di form. `categories.taxable` (mis. Rokok) tetap
+ *   dipakai sebagai SARAN nilai awal saat produk baru dibuat, bukan lagi
+ *   satu-satunya sumber — produk promo bisa ditandai beda dari kategorinya
+ *   tanpa perlu bikin kategori baru.
  *
  * "HAPUS" MENONAKTIFKAN. Riwayat transaksi menunjuk ke baris produk; produk
  * yang pernah terjual tidak boleh lenyap. Struk lama tetap benar karena
@@ -79,7 +80,7 @@ export default function KelolaProdukPage() {
   }
 
   const aktif = produk.filter((p) => p.active);
-  const bukanObjek = aktif.filter((p) => !p.kategori_taxable);
+  const bukanObjek = aktif.filter((p) => !p.taxable);
 
   async function simpan(isi: Record<string, unknown>) {
     setMenyimpan(true);
@@ -233,8 +234,8 @@ export default function KelolaProdukPage() {
                     </Td>
                     <Td className="text-ink-3">{p.kategori}</Td>
                     <Td>
-                      <Tanda jenis={p.kategori_taxable ? "brand" : "netral"}>
-                        {p.kategori_taxable ? "Objek PBJT" : "Bukan objek"}
+                      <Tanda jenis={p.taxable ? "brand" : "netral"}>
+                        {p.taxable ? "Objek PBJT" : "Bukan objek"}
                       </Tanda>
                     </Td>
                     <Td num>
@@ -386,6 +387,16 @@ function FormProduk({
     produk?.category_id ?? kategori[0]?.id ?? ""
   );
   const [active, setActive] = useState(produk?.active ?? true);
+  // Untuk produk baru, disarankan dari kategori yang aktif saat form dibuka —
+  // dihitung sekali (bukan disinkronkan tiap ganti kategori), supaya toggle
+  // yang sudah disentuh pengguna tidak diam-diam tertimpa saat ia ganti pikiran
+  // soal kategorinya.
+  const [taxable, setTaxable] = useState(
+    produk?.taxable ??
+      kategori.find((k) => k.id === (produk?.category_id ?? kategori[0]?.id))
+        ?.taxable ??
+      true
+  );
 
   const kategoriTerpilih = kategori.find((k) => k.id === categoryId);
 
@@ -400,6 +411,7 @@ function FormProduk({
             price: Number(price),
             category_id: categoryId,
             active,
+            taxable,
           });
         }}
       >
@@ -472,10 +484,11 @@ function FormProduk({
             <p className="text-ink-3 mt-1.5 text-[11px]">
               {kategoriTerpilih
                 ? kategoriTerpilih.taxable
-                  ? "Kategori ini objek PBJT — penjualannya dipungut pajak."
-                  : "Kategori ini bukan objek PBJT — penjualannya tidak dipungut pajak."
+                  ? "Kategori ini biasanya objek PBJT."
+                  : "Kategori ini biasanya bukan objek PBJT."
                 : ""}{" "}
-              Status pajak mengikuti kategori dan tidak bisa diatur per produk.
+              Hanya saran nilai awal — status pajak produk ini diatur sendiri di
+              bawah.
             </p>
           </Bidang>
 
@@ -493,6 +506,21 @@ function FormProduk({
               aplikasi kasir tidak pernah mengirim harga.
             </p>
           </Bidang>
+
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={taxable}
+              onChange={(e) => setTaxable(e.target.checked)}
+              className="accent-brand"
+            />
+            Kena PBJT — pajak dipungut saat produk ini terjual
+          </label>
+          <p className="text-ink-3 mt-1.5 mb-4 text-[11px]">
+            Berlaku untuk transaksi berikutnya. Struk dan laporan order yang
+            sudah lewat tidak berubah — pajaknya sudah tercatat di baris item
+            saat itu terjual.
+          </p>
 
           <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
             <input

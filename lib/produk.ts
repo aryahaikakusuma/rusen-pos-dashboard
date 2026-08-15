@@ -17,10 +17,11 @@ import { db } from "./supabase/server";
  *    diketik menentukan apakah ia bergabung ke kartu yang sudah ada atau berdiri
  *    sendiri. Tidak ada yang bisa dilakukan file ini untuk mengubah itu.
  *
- * 2. TIDAK ADA STOK, dan pajak melekat di KATEGORI. Skema `products` hanya punya
- *    kode, nama, kategori, harga, aktif. `categories.taxable` yang menentukan
- *    objek PBJT atau bukan, dan itu sifat barangnya (rokok), bukan pilihan per
- *    produk.
+ * 2. TIDAK ADA STOK. Skema `products` hanya punya kode, nama, kategori, harga,
+ *    aktif, dan (sejak `0034`) `taxable`. `categories.taxable` tetap ada dan
+ *    dipakai sebagai SARAN nilai awal saat produk baru dibuat, tapi
+ *    `products.taxable` yang otoritatif untuk transaksi — produk promo bisa
+ *    ditandai beda dari bawaan kategorinya tanpa perlu kategori baru.
  *
  * 3. "HAPUS" ADALAH MENONAKTIFKAN. `order_items.product_id` menunjuk ke baris
  *    produk, jadi penghapusan sungguhan akan ditolak kunci asing begitu produk
@@ -38,6 +39,7 @@ export interface MasukanProduk {
   price: number;
   category_id: string;
   active: boolean;
+  taxable: boolean;
 }
 
 export async function daftarKategori(): Promise<Kategori[]> {
@@ -54,7 +56,7 @@ export async function daftarKategori(): Promise<Kategori[]> {
 export async function daftarProduk(): Promise<Produk[]> {
   const { data, error } = await db
     .from("products")
-    .select("id, code, name, price, active, category_id, categories (name, taxable)")
+    .select("id, code, name, price, active, category_id, taxable, categories (name, taxable)")
     .order("name");
 
   if (error) throw new Error(`Gagal membaca produk: ${error.message}`);
@@ -76,6 +78,7 @@ export async function daftarProduk(): Promise<Produk[]> {
       category_id: baris.category_id,
       kategori: kategori?.name ?? "-",
       kategori_taxable: kategori?.taxable ?? true,
+      taxable: baris.taxable,
     };
   });
 }
@@ -101,6 +104,7 @@ function periksa(masukan: unknown): MasukanProduk {
   const name = String(m.name ?? "").trim();
   const category_id = String(m.category_id ?? "").trim();
   const active = m.active !== false;
+  const taxable = m.taxable !== false;
 
   if (!code) throw new KesalahanMasukan("Kode produk wajib diisi.");
   if (!/^[A-Z0-9-]{1,20}$/.test(code)) {
@@ -120,7 +124,7 @@ function periksa(masukan: unknown): MasukanProduk {
     throw new KesalahanMasukan("Harga di luar batas wajar.");
   }
 
-  return { code, name, price, category_id, active };
+  return { code, name, price, category_id, active, taxable };
 }
 
 async function outletDariKategori(category_id: string): Promise<string> {

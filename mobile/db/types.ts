@@ -36,6 +36,12 @@ export interface ProductRow {
   name: string;
   price: number;
   active: number;
+  /**
+   * Otoritatif sejak server `0034` — bisa berbeda dari `categories.taxable`
+   * kategorinya (produk promo, mis.). Nullable dari sisi server: baris yang
+   * ditarik sebelum hosted DB menjalankan 0034 tidak punya kolom ini.
+   */
+  taxable: number | null;
 }
 
 export interface OrderRow {

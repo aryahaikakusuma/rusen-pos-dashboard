@@ -440,4 +440,13 @@ join categories c
   on c.code = v.cat_code
  and c.outlet_id = '00000000-0000-0000-0000-000000000001';
 
+-- products.taxable otoritatif sejak 0034, defaultnya true di kolom. Backfill
+-- dari kategori supaya instalasi baru lewat seed ini mendarat di keadaan yang
+-- sama dengan basis data yang naik lewat migrasi satu-satu — Rokok bebas
+-- pajak di sini juga, bukan cuma di kategorinya.
+update products p
+set taxable = c.taxable
+from categories c
+where c.id = p.category_id and p.taxable is distinct from c.taxable;
+
 commit;

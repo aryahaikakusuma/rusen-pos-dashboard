@@ -37,6 +37,7 @@ for (const m of seed.matchAll(baris)) {
     name: m[3],
     price: Number(m[4]),
     active: 1,
+    taxable: 1,
   });
 }
 

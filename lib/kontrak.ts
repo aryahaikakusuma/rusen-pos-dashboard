@@ -123,7 +123,10 @@ export interface Produk {
   active: boolean;
   category_id: string;
   kategori: string;
+  /** Bawaan dari kategori — dipakai dashboard sebagai SARAN saat produk baru dibuat. */
   kategori_taxable: boolean;
+  /** Otoritatif untuk transaksi baru sejak `0034`. Bisa berbeda dari `kategori_taxable`. */
+  taxable: boolean;
 }
 
 /* ----------------------------------------------------- balasan route handler */

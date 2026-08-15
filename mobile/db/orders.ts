@@ -1157,13 +1157,13 @@ async function loadProduct(
   productId: string
 ): Promise<ProductRow & { taxable: number }> {
   // Sifat kena-pajak ikut dibaca di sini supaya ia bisa di-SNAPSHOT ke
-  // order_items saat baris dibuat. `coalesce(c.taxable, 1)`: produk tanpa
-  // kategori dipungut pajak — bebas pajak harus selalu keputusan yang tegas,
-  // bukan akibat sambungan yang gagal.
+  // order_items saat baris dibuat. Sejak 0034 nilainya di baris produk itu
+  // sendiri (ditarik oleh pullCatalog), bukan lagi lewat join ke categories.
+  // `coalesce(p.taxable, 1)`: bebas pajak harus selalu keputusan yang tegas,
+  // bukan akibat kolom yang belum sempat ditarik.
   const product = await db.getFirstAsync<ProductRow & { taxable: number }>(
-    `select p.*, coalesce(c.taxable, 1) as taxable
+    `select p.*, coalesce(p.taxable, 1) as taxable
      from products p
-     left join categories c on c.id = p.category_id
      where p.id = ?`,
     [productId]
   );
