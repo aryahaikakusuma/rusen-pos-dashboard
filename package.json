@@ -9,8 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "periksa:laporan": "node scripts/periksa-laporan.mjs",
-    "periksa:pendapatan": "node scripts/periksa-pendapatan.mjs",
-    "periksa:excel": "node --conditions=react-server scripts/periksa-excel.mjs"
+    "periksa:pendapatan": "node scripts/periksa-pendapatan.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

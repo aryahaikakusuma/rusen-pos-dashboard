@@ -9,8 +9,6 @@ const mulai = lama.indexOf("create function laporan_penjualan_harian(");
 const akhir = lama.indexOf("-- ============================================================ 2.", mulai);
 const migrasi = "supabase/migrations/0035_pendapatan_bersih.sql";
 const baru = fs.existsSync(migrasi) ? fs.readFileSync(migrasi, "utf8") : "";
-const migrasiExcel = "supabase/migrations/0036_refund_pokok_laporan.sql";
-const excel = fs.existsSync(migrasiExcel) ? fs.readFileSync(migrasiExcel, "utf8") : "";
 const sql = `
 begin;
 create schema rusen_pendapatan_check;
@@ -86,50 +84,6 @@ do $$ begin
  if exists (select * from sebelum except select * from laporan_penjualan_harian_v2('2026-09-30','2026-10-03'))
  then raise exception 'migration rerun changed results'; end if;
 end $$;
-create temporary table sebelum_v2 as
-  select * from laporan_penjualan_harian_v2('2026-09-30','2026-10-03');
-${excel.replace(/^begin;|^commit;/gm, "")}
-do $$
-declare r record;
-begin
- select * into r from laporan_penjualan_harian_v3('2026-10-01','2026-10-01');
- if (r.omzet_kotor,r.pbjt_bersih,r.refund_pokok,r.omzet_bersih)
-    is distinct from (40005::bigint,501::bigint,25003::bigint,15002::bigint)
- then raise exception 'Excel net tax/principal refund: %',row_to_json(r); end if;
- select * into r from laporan_penjualan_harian_v3('2026-10-02','2026-10-02');
- if (r.pbjt_bersih,r.refund_pokok,r.omzet_bersih)
-    is distinct from (-501::bigint,5002::bigint,-5002::bigint)
- then raise exception 'Excel refund-only day: %',row_to_json(r); end if;
- select * into r from laporan_penjualan_harian_v3('2026-10-03','2026-10-03');
- if r.refund_pokok <> 0 or r.pbjt_bersih <> 0 then raise exception 'Excel empty day'; end if;
- select * into r from laporan_penjualan_harian_v3('2026-10-01','2026-10-01',true);
- if r.refund_pokok <> 115003 then raise exception 'Excel include-test'; end if;
- if exists (select 1 from laporan_penjualan_harian_v3('2026-09-30','2026-10-03')
-   where omzet_kotor - refund_pokok <> omzet_bersih
-      or total_refund <> refund_pokok + refund_pbjt)
- then raise exception 'Excel refund reconciliation'; end if;
- if exists (
-   select tanggal,jumlah_order,omzet_kotor,total_refund,omzet_bersih,dasar_pbjt,
-     pbjt,omzet_bebas_order,omzet_bukan_objek,tertagih,tertagih_tunai,
-     tertagih_non_tunai,tertagih_bersih,refund_pbjt,pbjt_bersih
-   from laporan_penjualan_harian_v3('2026-09-30','2026-10-03')
-   except select * from sebelum_v2)
-   or exists (select * from sebelum_v2 except
-     select * from laporan_penjualan_harian_v2('2026-09-30','2026-10-03'))
- then raise exception 'v3 changed v2 results'; end if;
- if has_function_privilege('anon','laporan_penjualan_harian_v3(date,date,boolean)','EXECUTE')
-   or has_function_privilege('authenticated','laporan_penjualan_harian_v3(date,date,boolean)','EXECUTE')
-   or not has_function_privilege('service_role','laporan_penjualan_harian_v3(date,date,boolean)','EXECUTE')
- then raise exception 'v3 execute privileges'; end if;
-end $$;
-create temporary table sebelum_v3 as
-  select * from laporan_penjualan_harian_v3('2026-09-30','2026-10-03');
-${excel.replace(/^begin;|^commit;/gm, "")}
-do $$ begin
- if exists (select * from sebelum_v3 except select * from laporan_penjualan_harian_v3('2026-09-30','2026-10-03'))
-   or exists (select * from laporan_penjualan_harian_v3('2026-09-30','2026-10-03') except select * from sebelum_v3)
- then raise exception 'v3 rerun changed results'; end if;
-end $$;
 rollback;
 `;
 try {
@@ -151,7 +105,7 @@ try {
   const hasil = spawnSync("docker", ["exec", "-i", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1"],
     { input: sql, encoding: "utf8" });
   if (hasil.status !== 0) throw new Error(hasil.stderr || hasil.error?.message);
-  console.log("Pendapatan: taxed, exempt, mixed goods, refunds, WIB, test exclusion, v1/v2/v3 compatibility, refund principal and rerun passed.");
+  console.log("Pendapatan: taxed, exempt, mixed goods, refunds, WIB, test exclusion, v1 compatibility and rerun passed.");
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
