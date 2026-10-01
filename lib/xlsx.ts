@@ -27,7 +27,9 @@ import {
  * "ini bulan apa" dan "angka uji ikut tidak".
  */
 
-const RUPIAH = '#,##0;[Red]-#,##0';
+// Excel-invariant separators; display follows the viewer's locale. Keep cells
+// numeric, including zero/negative amounts, so SUM and sorting still work.
+const RUPIAH = '"Rp "#,##0;[Red]-"Rp "#,##0;"Rp "0';
 const CACAH = "#,##0";
 
 interface Judul {
@@ -115,49 +117,25 @@ export async function bukuHarian(
     sheet,
     mulai,
     [
-      { judul: "Tanggal", lebar: 13 },
-      { judul: "Hari", lebar: 9 },
-      { judul: "Order", lebar: 9, format: CACAH },
-      { judul: "Omzet Kotor", lebar: 15, format: RUPIAH },
-      { judul: "Dasar PBJT", lebar: 15, format: RUPIAH },
-      { judul: "PBJT", lebar: 13, format: RUPIAH },
-      { judul: "Bebas (Order)", lebar: 15, format: RUPIAH },
-      { judul: "Bukan Objek", lebar: 14, format: RUPIAH },
-      { judul: "Refund", lebar: 13, format: RUPIAH },
-      { judul: "Omzet Bersih", lebar: 15, format: RUPIAH },
-      { judul: "Tertagih", lebar: 15, format: RUPIAH },
-      { judul: "Tunai", lebar: 14, format: RUPIAH },
-      { judul: "Non-Tunai", lebar: 14, format: RUPIAH },
+      { judul: "Tanggal", lebar: 25 },
+      { judul: "Omset Kotor", lebar: 20, format: RUPIAH },
+      { judul: "Nilai PBJT", lebar: 18, format: RUPIAH },
+      { judul: "Refund", lebar: 18, format: RUPIAH },
+      { judul: "Omset Bersih", lebar: 20, format: RUPIAH },
     ],
     baris.map((b) => [
-      b.tanggal,
-      namaHari(b.tanggal),
-      b.jumlah_order,
+      `${namaHari(b.tanggal)}, ${tanggalPendek(b.tanggal)}`,
       b.omzet_kotor,
-      b.dasar_pbjt,
-      b.pbjt,
-      b.omzet_bebas_order,
-      b.omzet_bukan_objek,
-      b.total_refund,
+      b.pbjt_bersih,
+      b.refund_pokok,
       b.omzet_bersih,
-      b.tertagih,
-      b.tertagih_tunai,
-      b.tertagih_non_tunai,
     ]),
     [
       "TOTAL",
-      "",
-      jumlah(baris, (b) => b.jumlah_order),
       jumlah(baris, (b) => b.omzet_kotor),
-      jumlah(baris, (b) => b.dasar_pbjt),
-      jumlah(baris, (b) => b.pbjt),
-      jumlah(baris, (b) => b.omzet_bebas_order),
-      jumlah(baris, (b) => b.omzet_bukan_objek),
-      jumlah(baris, (b) => b.total_refund),
+      jumlah(baris, (b) => b.pbjt_bersih),
+      jumlah(baris, (b) => b.refund_pokok),
       jumlah(baris, (b) => b.omzet_bersih),
-      jumlah(baris, (b) => b.tertagih),
-      jumlah(baris, (b) => b.tertagih_tunai),
-      jumlah(baris, (b) => b.tertagih_non_tunai),
     ]
   );
 
@@ -165,10 +143,9 @@ export async function bukuHarian(
   // membuka berkas tiga bulan kemudian akan menjumlahkan kolom yang salah.
   const akhir = mulai + baris.length + 3;
   [
-    "Omzet Kotor = Dasar PBJT + Bebas (Order) + Bukan Objek.",
-    "Tertagih = Omzet Kotor + PBJT. Tunai + Non-Tunai = Tertagih.",
-    "Omzet Bersih = Omzet Kotor - pokok refund; kolom Refund memuat pokok + pajaknya.",
-    "Refund dicatat pada tanggal refundnya, bukan tanggal order aslinya.",
+    "Omset Kotor mencakup seluruh penjualan sebelum PBJT, termasuk Bukan Objek dan order bebas pajak.",
+    "Nilai PBJT = pajak terpungut - pajak dikembalikan. Refund = pokok pengembalian tanpa pajak.",
+    "Omset Bersih = Omset Kotor - Refund, tanpa PBJT. Refund dicatat pada tanggal pengembalian (WIB).",
   ].forEach((teks, i) => {
     sheet.getCell(akhir + i, 1).value = teks;
     sheet.getCell(akhir + i, 1).font = { size: 9, italic: true };
@@ -245,7 +222,7 @@ export async function bukuDetail(
     "Satu baris = satu order lunas. Rincian item tidak disertakan: satu order punya banyak item, dan mencampurnya membuat setiap penjumlahan jadi ganda.",
     "Kolom Kode Meja ditulis apa adanya dan tidak ditafsirkan sebagai jenis order.",
     "Kolom Refund adalah seluruh refund atas order itu, tanpa memandang tanggal refundnya.",
-    "Kolom Dasar PBJT dikosongkan pada order yang dibebaskan, supaya totalnya sama dengan dasar pengenaan di laporan Penjualan Harian.",
+    "Kolom Dasar PBJT dikosongkan pada order yang dibebaskan; totalnya cocok dengan dasar pengenaan pada dashboard.",
   ].forEach((teks, i) => {
     sheet.getCell(akhir + i, 1).value = teks;
     sheet.getCell(akhir + i, 1).font = { size: 9, italic: true };

@@ -46,7 +46,7 @@ Chart.register(
 
 Chart.defaults.font.family =
   "var(--ff-poppins), system-ui, sans-serif";
-Chart.defaults.color = "#77807E";
+Chart.defaults.color = "#606A68";
 
 export const WARNA = {
   brand: "#04C99E",

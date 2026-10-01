@@ -4,7 +4,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
-import { BarisKpi, IsiKartu, Kartu, KepalaKartu, Kpi } from "@/components/dashboard/Kartu";
+import { Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
+import { BarisMobile, DaftarMobile, Fakta, Nilai, Rincian } from "@/components/dashboard/Ringkasan";
 import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Tanda, Td, Th } from "@/components/dashboard/Tabel";
 import { Api } from "@/lib/api-klien";
@@ -101,26 +102,12 @@ export default function DetailPenjualanPage() {
           tabel dari laporan DETAIL, jadi keduanya bisa selesai pada saat yang
           berbeda. Satu penanda gabungan akan berbohong tentang salah satunya. */}
       <AreaData menyegarkan={harian.memuat}>
-      <div className="no-print">
-        <BarisKpi>
-          <Kpi label="Order Lunas" nilai={angka(ringkas.order)} kaki="Seluruh periode" />
-          <Kpi
-            label="Omzet Kotor"
-            nilai={rupiah(ringkas.omzet)}
-            kaki="Pra-pajak, sama dengan Penjualan Harian"
-          />
-          <Kpi
-            label="Rata-rata per Order"
-            nilai={rupiah(bagi(ringkas.omzet, ringkas.order))}
-            kaki="Ukuran keranjang periode ini"
-          />
-          <Kpi label="PBJT Terpungut" nilai={rupiah(ringkas.pbjt)} kaki="Seluruh periode" />
-          <Kpi
-            label="Refund"
-            nilai={rupiah(ringkas.refund)}
-            kaki="Pada tanggal refundnya"
-          />
-        </BarisKpi>
+      <div className="no-print mb-4">
+        {harian.galat ? <Gagal pesan={harian.galat} coba={harian.muatUlang} /> : !harian.data ? <SedangMemuat tinggi="h-24" /> :
+          <div className="border-line rounded-xl border bg-white p-4"><Fakta>
+            <Nilai label="Order lunas seluruh periode">{angka(ringkas.order)}</Nilai>
+            <Nilai label="Penjualan tanpa PBJT sebelum refund">{rupiah(ringkas.omzet)}</Nilai>
+          </Fakta></div>}
       </div>
       </AreaData>
 
@@ -136,7 +123,23 @@ export default function DetailPenjualanPage() {
             sub={`${angka(totalBaris)} order · halaman ${halaman} dari ${totalHalaman}`}
           />
 
-          <Gulung>
+          <DaftarMobile>
+            {baris.length === 0 ? <Kosong>Tidak ada order lunas pada rentang ini.</Kosong> : baris.map((b) =>
+              <BarisMobile key={b.order_id} judul={<>{b.nomor_order}{b.is_test_data ? <Tanda jenis="peringatan">UJI</Tanda> : null}</>} sub={`${b.waktu_bayar_wib} · ${b.kasir}`} nilai={rupiah(b.total)}>
+                <Fakta>
+                  <Nilai label="Kode meja">{b.table_code}</Nilai>
+                  <Nilai label="Metode bayar">{b.metode_bayar === "cash" ? "Tunai" : "Non-Tunai"}</Nilai>
+                  <Nilai label="Subtotal">{rupiah(b.subtotal)}</Nilai>
+                  <Nilai label="Dasar PBJT">{b.status_pajak === "exempt" ? "—" : rupiah(b.dasar_pbjt)}</Nilai>
+                  <Nilai label="PBJT">{rupiah(b.pbjt)}</Nilai>
+                  <Nilai label="Total tagihan">{rupiah(b.total)}</Nilai>
+                  <Nilai label="Refund order (seluruh waktu)">{rupiah(b.refund_total)}</Nilai>
+                  <Nilai label="Status pajak">{b.status_pajak === "exempt" ? "Bebas" : "Dipungut"}</Nilai>
+                  {b.status_pajak === "exempt" ? <><Nilai label="Alasan pembebasan">{b.alasan_bebas || "—"}</Nilai><Nilai label="Disetujui oleh">{b.disetujui_oleh || "—"}</Nilai></> : null}
+                </Fakta>
+              </BarisMobile>)}
+          </DaftarMobile>
+          <Gulung desktop>
             {/* Sebelas kolom: dirapatkan supaya sebanyak mungkin muat sebelum
                 penggulir mendatar diperlukan. */}
             <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
@@ -269,8 +272,14 @@ export default function DetailPenjualanPage() {
         </AreaData>
       )}
 
-      <Kartu className="no-print mt-4">
-        <IsiKartu className="text-ink-3 text-xs leading-relaxed">
+      <Rincian judul="Ringkasan tambahan dan catatan" className="no-print mt-4">
+        {harian.data && !harian.galat ? <div className="mb-4"><Fakta>
+          <Nilai label="Rata-rata penjualan per order">{rupiah(bagi(ringkas.omzet, ringkas.order))}</Nilai>
+          <Nilai label="PBJT terpungut sebelum refund">{rupiah(ringkas.pbjt)}</Nilai>
+          <Nilai label="Refund pada periode ini">{rupiah(ringkas.refund)}</Nilai>
+          <Nilai label="Tagihan sebelum refund">{rupiah(ringkas.tertagih)}</Nilai>
+        </Fakta></div> : null}
+        <div className="text-ink-2 text-xs leading-relaxed">
           <p>
             <b className="text-ink-2">Kolom Kode Meja ditulis apa adanya.</b> Ia
             tidak ditafsirkan sebagai jenis order: aplikasi kasir punya sakelar
@@ -286,8 +295,9 @@ export default function DetailPenjualanPage() {
             baris yang kebetulan sedang tampil akan menghasilkan hasil yang
             berbeda tiap halaman.
           </p>
-        </IsiKartu>
-      </Kartu>
+          <p className="mt-2">Refund per order mencakup seluruh waktu. Ringkasan periode mengikuti tanggal pengembalian uang.</p>
+        </div>
+      </Rincian>
     </>
   );
 }

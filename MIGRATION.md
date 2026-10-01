@@ -2298,6 +2298,53 @@ shift-nya sedang berjalan saat OTA terpasang perlu tutup-buka aplikasi dua kali 
 `checkOnLaunch: ALWAYS`) supaya katalognya ikut ditarik ulang dan status pajak per produk yang
 baru terbaca benar.
 
+## Dashboard responsive dan pendapatan bersih — 2026-10-01 (web; 0035 diterapkan ke hosted)
+
+Dashboard lama menumpuk kartu KPI dan semua grafik di HP. Dua angka yang
+dibutuhkan Heika sekarang tampil paling awal: **Pendapatan tanpa PBJT** dan
+**Penerimaan termasuk PBJT**, keduanya setelah refund pada periode yang dipilih.
+Analisis dashboard dibagi ke tab Tren, Produk, Pembayaran, dan PBJT; hanya panel
+aktif dipasang. Halaman laporan, katalog, dan histori memakai daftar rincian
+yang bisa dibuka di bawah 768px, sedangkan desktop tetap memakai tabel. Grafik
+tambahan pada laporan ditempatkan setelah hasil dan dibuka bila dibutuhkan.
+Tidak ada perubahan pada `mobile/` atau alur kasir.
+
+Angka termasuk PBJT tidak boleh dihitung sebagai omzet dikali tarif: order
+bebas pajak, rokok bukan objek, dan refund dengan sisa pembulatan membuat cara
+itu salah. `0035_pendapatan_bersih.sql` menambahkan
+`laporan_penjualan_harian_v2` dengan `tertagih_bersih`, `refund_pbjt`, dan
+`pbjt_bersih`. Semuanya memakai nilai tersimpan pada order/refund. Refund
+diakui pada `refunds.created_at` dalam WIB, termasuk refund order yang dibayar
+di periode sebelumnya; hari yang hanya berisi refund boleh negatif.
+
+Fungsi v1 mempertahankan nama, parameter, dan 12 kolomnya, lalu memproyeksikan
+hasil v2 supaya tidak muncul jalur hitung kedua. Kolom bruto tetap tersedia
+untuk rekonsiliasi. UI dan XLSX harian memanggil v2 yang sama; tiga kolom baru
+ditambahkan di akhir XLSX, tanpa memindahkan kolom lama. Tidak ada data seed
+yang berubah. Terapkan migration 0035 sebelum menerbitkan frontend baru;
+frontend lama tetap dapat memanggil v1 setelah migration diterapkan.
+
+Verifikasi memakai Postgres/PostgREST terisolasi dengan data contoh, bukan
+data hosted. `npm run periksa:pendapatan` memeriksa transaksi taxable/exempt,
+barang campuran, refund parsial/penuh dan sisa pajak, batas WIB, hari kosong,
+refund lintas periode, pengecualian data uji, hak eksekusi, kompatibilitas v1,
+dan penerapan migration dua kali. Gate `periksa:laporan` memeriksa tiga route
+serta tiga XLSX. Pemeriksaan browser mencakup tujuh halaman pada 320, 375,
+390, 768, 1024, dan 1440px, tab keyboard, kalender, disclosure, rincian kas,
+dan cetak. Rincian tertutup dibuka sementara saat cetak; tabel harian bersih
+dipisah dari tabel bruto agar kolom tambahan tidak memaksa satu tabel A4 lebar.
+
+Referensi Majoo belum diperiksa: konektor Chrome gagal memuat kebijakan
+request-header. Implementasi mengikuti `DESIGN.md` dan kebutuhan yang disetujui.
+Heika mengonfirmasi migration dan push pada 2026-10-01. CLI `db push --linked
+--skip-vault` menerapkan hanya 0035 ke hosted `vczsduiboxmaauwukbkl`; history
+mencatat 0035 dan hak execute tetap hanya service_role. Rekonsiliasi SQL 31
+hari tidak menemukan selisih. Build produksi lokal dengan database hosted
+lulus 45 pemeriksaan route/XLSX untuk 2026-09-01 sampai 2026-10-01 (2.487
+order lunas). Frontend diterbitkan lewat push `dashboard-web:main` ke remote
+`web`, yang memicu deploy produksi Vercel. Tidak ada seed atau data order yang
+ditulis dalam verifikasi hosted.
+
 ## Step 8 — Device and store builds
 
 `preview` for installable tablet tests, `production` for the final sideloaded build.

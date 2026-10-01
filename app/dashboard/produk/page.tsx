@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 
 import { useToast } from "@/components/Toast";
-import { BarisKpi, Kartu, KepalaKartu, Kpi } from "@/components/dashboard/Kartu";
+import { Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
+import { BarisMobile, DaftarMobile, Fakta, Nilai } from "@/components/dashboard/Ringkasan";
 import { Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Tanda, Td, Th } from "@/components/dashboard/Tabel";
 import { Api } from "@/lib/api-klien";
@@ -133,16 +134,18 @@ export default function KelolaProdukPage() {
        * terdampar jauh di kanan.
        */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="dashboard-filters flex flex-wrap items-center gap-3">
           <input
             value={cari}
             onChange={(e) => ubahFilter(setCari, e.target.value)}
             placeholder="Cari nama atau kode produk…"
-            className="border-line focus:border-brand min-w-[200px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
+            aria-label="Cari produk"
+            className="border-line focus:border-brand min-w-0 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none sm:min-w-[200px]"
           />
           <select
             value={filterKategori}
             onChange={(e) => ubahFilter(setFilterKategori, e.target.value)}
+            aria-label="Filter kategori produk"
             className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
           >
             <option value="">Semua kategori</option>
@@ -174,35 +177,32 @@ export default function KelolaProdukPage() {
         </button>
       </div>
 
-      <BarisKpi>
-        <Kpi
-          label="Produk Aktif"
-          nilai={angka(aktif.length)}
-          kaki="Muncul di menu aplikasi kasir"
-        />
-        <Kpi
-          label="Objek PBJT"
-          nilai={angka(aktif.length - bukanObjek.length)}
-          kaki="Kategorinya dipungut pajak"
-        />
-        <Kpi
-          label="Bukan Objek PBJT"
-          nilai={angka(bukanObjek.length)}
-          kaki="Rokok dan sejenisnya"
-        />
-        <Kpi
-          label="Nonaktif"
-          nilai={angka(produk.length - aktif.length)}
-          kaki="Tetap utuh di seluruh riwayat"
-        />
-      </BarisKpi>
+      <div className="text-ink-2 mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <span><b>{angka(aktif.length)}</b> aktif</span>
+        <span><b>{angka(produk.length - aktif.length)}</b> nonaktif</span>
+        <span><b>{angka(aktif.length - bukanObjek.length)}</b> objek PBJT</span>
+        <span><b>{angka(bukanObjek.length)}</b> bukan objek PBJT</span>
+      </div>
 
       <Kartu className="overflow-hidden">
         <KepalaKartu
           judul="Daftar Produk"
           sub={`${angka(tampil.length)} dari ${angka(produk.length)} produk`}
         />
-        <Gulung>
+        <DaftarMobile>
+          {tampil.length === 0 ? <Kosong>Tidak ada produk yang cocok.</Kosong> : tampilHalaman.map((p) =>
+            <BarisMobile key={p.id} judul={p.name} sub={`${p.kategori} · ${p.active ? "Aktif" : "Nonaktif"}`} nilai={rupiah(p.price)}>
+              <Fakta>
+                <Nilai label="Kode produk">{p.code}</Nilai>
+                <Nilai label="Status pajak">{p.taxable ? "Objek PBJT" : "Bukan objek"}</Nilai>
+              </Fakta>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => { setSedangDiubah(p); setFormBuka(true); }} className="border-line hover:border-brand cursor-pointer rounded-lg border px-4 text-sm font-semibold">Ubah</button>
+                {p.active ? <button type="button" onClick={() => setAkanDinonaktifkan(p)} className="bg-danger-soft text-danger cursor-pointer rounded-lg px-4 text-sm font-semibold">Nonaktifkan</button> : null}
+              </div>
+            </BarisMobile>)}
+        </DaftarMobile>
+        <Gulung desktop>
           <table className="w-full border-collapse">
             <thead>
               <tr>

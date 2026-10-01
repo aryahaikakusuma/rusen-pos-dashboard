@@ -84,8 +84,12 @@ const H = harian.baris.reduce(
     tunai: a.tunai + b.tertagih_tunai,
     nonTunai: a.nonTunai + b.tertagih_non_tunai,
     refund: a.refund + b.total_refund,
+    pendapatan: a.pendapatan + b.omzet_bersih,
+    penerimaan: a.penerimaan + b.tertagih_bersih,
+    refundPbjt: a.refundPbjt + b.refund_pbjt,
+    pbjtBersih: a.pbjtBersih + b.pbjt_bersih,
   }),
-  { order: 0, omzet: 0, dasar: 0, pbjt: 0, bebas: 0, bukanObjek: 0, tertagih: 0, tunai: 0, nonTunai: 0, refund: 0 }
+  { order: 0, omzet: 0, dasar: 0, pbjt: 0, bebas: 0, bukanObjek: 0, tertagih: 0, tunai: 0, nonTunai: 0, refund: 0, pendapatan: 0, penerimaan: 0, refundPbjt: 0, pbjtBersih: 0 }
 );
 
 /* --------------------------------------- 2. Detail Penjualan, seluruh halaman */
@@ -220,6 +224,13 @@ cek("Produk.omzet = xlsx Produk", P.omzet, X.produk.omzet);
 cek("Harian.tertagih = Detail.total", H.tertagih, D.total);
 cek("Harian.tertagih = omzet + pbjt", H.tertagih, H.omzet + H.pbjt);
 cek("Harian tunai + non-tunai = tertagih", H.tunai + H.nonTunai, H.tertagih);
+cek("Penerimaan bersih = pendapatan tanpa PBJT + PBJT bersih", H.penerimaan, H.pendapatan + H.pbjtBersih);
+cek("Penerimaan bersih = tertagih - seluruh refund", H.penerimaan, H.tertagih - H.refund);
+cek("PBJT bersih = terpungut - dikembalikan", H.pbjtBersih, H.pbjt - H.refundPbjt);
+cek("Pendapatan tanpa PBJT = xlsx Harian", H.pendapatan, n(th, 10));
+cek("Penerimaan bersih termasuk PBJT = xlsx Harian", H.penerimaan, n(th, 14));
+cek("PBJT dikembalikan = xlsx Harian", H.refundPbjt, n(th, 15));
+cek("PBJT bersih = xlsx Harian", H.pbjtBersih, n(th, 16));
 
 cek("Harian.pbjt = Detail.pbjt", H.pbjt, D.pbjt);
 cek("Harian.dasar_pbjt = Detail(taxable).dasar_pbjt", H.dasar, D.dasarDipungut);

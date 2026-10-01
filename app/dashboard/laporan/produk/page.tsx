@@ -5,14 +5,12 @@ import { useMemo, useState } from "react";
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import {
-  BarisKpi,
-  IsiKartu,
   Kartu,
   KepalaKartu,
-  Kpi,
 } from "@/components/dashboard/Kartu";
 import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
+import { BarisMobile, DaftarMobile, Fakta, Nilai, Rincian } from "@/components/dashboard/Ringkasan";
 import TrenProduk from "@/components/dashboard/TrenProduk";
 import { Api } from "@/lib/api-klien";
 import { angka, bagi, persen, rupiah, rupiahRingkas } from "@/lib/format";
@@ -270,7 +268,7 @@ export default function LaporanProdukPage() {
     <>
       <KontrolPeriode waktuData={pada} />
 
-      <div className="no-print mb-5 flex flex-wrap items-center gap-3">
+      <div className="dashboard-filters no-print mb-4 flex flex-wrap items-center gap-3">
         <input
           value={cari}
           onChange={(e) => {
@@ -278,7 +276,8 @@ export default function LaporanProdukPage() {
             setHalaman(1);
           }}
           placeholder="Cari nama, kode, atau kategori…"
-          className="border-line focus:border-brand min-w-[240px] rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none"
+          aria-label="Cari produk dalam laporan"
+          className="border-line focus:border-brand min-w-0 rounded-[10px] border bg-white px-3 py-2 text-sm font-medium outline-none sm:min-w-[240px]"
         />
         <select
           value={urutan}
@@ -286,6 +285,7 @@ export default function LaporanProdukPage() {
             setUrutan(e.target.value as Urutan);
             setHalaman(1);
           }}
+          aria-label="Urutan produk"
           className="border-line cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-sm font-medium"
         >
           <option value="omzet">Urutkan: Omzet tertinggi</option>
@@ -295,72 +295,35 @@ export default function LaporanProdukPage() {
       </div>
 
       <AreaData menyegarkan={memuat}>
-      <div className="no-print">
-        <BarisKpi>
-          <Kpi
-            label="Varian Terjual"
-            nilai={`${angka(semua.length)} varian`}
-            kaki="Baris produk yang laku minimal satu kali"
-          />
-          <Kpi
-            label="Penyumbang 80% Omzet"
-            nilai={`${angka(n80)} varian`}
-            kaki={`Dari ${angka(semua.length)} varian yang terjual`}
-          />
-          <Kpi
-            label="Paling Laris"
-            nilai={terlaris?.nama_produk ?? "—"}
-            kecil
-            kaki={terlaris ? `${angka(terlaris.terjual)} pcs terjual` : "Belum ada data"}
-          />
-          <Kpi
-            label="Total Omzet"
-            nilai={rupiah(totalOmzet)}
-            kaki="Kotor — refund tidak dikurangkan"
-          />
-          <Kpi
-            label="Total Terjual"
-            nilai={`${angka(totalTerjual)} pcs`}
-            kaki={`${angka(kategori.length)} kategori`}
-          />
-        </BarisKpi>
+      <div className="border-line no-print mb-4 rounded-xl border bg-white p-4">
+        <Fakta>
+          <Nilai label="Penjualan tanpa PBJT sebelum refund">{rupiah(totalOmzet)}</Nilai>
+          <Nilai label="Total terjual">{angka(totalTerjual)} pcs · {angka(semua.length)} varian</Nilai>
+        </Fakta>
       </div>
 
       {/* Sumbu tanggal, dari `0028` — satu-satunya blok di halaman ini yang
           punya waktu. Sisanya (Pareto, kategori, tabel) berasal dari
           `laporan_produk`, yang mengagregasi seluruh periode jadi satu baris per
           varian dan karena itu tidak bisa menjawab "kapan". */}
-      <TrenProduk periode={periode} pilihan={semua} />
-
-      <div className="mb-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <Kartu>
-          <KepalaKartu
-            judul="Kontribusi Omzet per Varian"
-            sub="Sepuluh teratas · garis kuning adalah kumulatif terhadap omzet periode"
-          />
-          <IsiKartu>
-            <Grafik config={pareto} judulAksesibilitas="Pareto kontribusi omzet per varian" />
-          </IsiKartu>
-        </Kartu>
-
-        <Kartu>
-          <KepalaKartu judul="Omzet per Kategori" sub="Dijumlahkan dari baris varian" />
-          <IsiKartu>
-            <Grafik
-              config={grafikKategori}
-              judulAksesibilitas="Omzet per kategori"
-            />
-          </IsiKartu>
-        </Kartu>
-      </div>
-
       <Kartu className="overflow-hidden">
         <KepalaKartu
           judul="Rekap Performa Varian"
           sub={`${angka(tampil.length)} dari ${angka(semua.length)} varian ditampilkan`}
         />
 
-        <Gulung>
+        <DaftarMobile>
+          {tampil.length === 0 ? <Kosong>{semua.length === 0 ? "Tidak ada produk terjual pada rentang ini." : "Tidak ada varian yang cocok dengan pencarian."}</Kosong> : tampilHalaman.map((b) =>
+            <BarisMobile key={b.product_code} judul={b.nama_produk} sub={`${b.kategori} · ${angka(b.terjual)} pcs`} nilai={rupiah(b.omzet)}>
+              <Fakta>
+                <Nilai label="Kode produk">{b.product_code}</Nilai>
+                <Nilai label="Kategori">{b.kategori}</Nilai>
+                <Nilai label="Terjual">{angka(b.terjual)} pcs</Nilai>
+                <Nilai label="Kontribusi omzet periode">{persen(b.kontribusi_persen, 2)}</Nilai>
+              </Fakta>
+            </BarisMobile>)}
+        </DaftarMobile>
+        <Gulung desktop>
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -469,10 +432,27 @@ export default function LaporanProdukPage() {
           </div>
         ) : null}
       </Kartu>
+      <Rincian judul="Analisis produk" className="no-print mt-4">
+        <Fakta>
+          <Nilai label="Penyumbang 80% omzet">{angka(n80)} varian</Nilai>
+          <Nilai label="Paling laris">{terlaris ? `${terlaris.nama_produk} · ${angka(terlaris.terjual)} pcs` : "Belum ada data"}</Nilai>
+          <Nilai label="Kategori terjual">{angka(kategori.length)}</Nilai>
+        </Fakta>
+        <div className="mt-4"><TrenProduk periode={periode} pilihan={semua} /></div>
+        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <section><h3 className="mb-2 text-sm font-semibold">Kontribusi omzet per varian</h3>
+            <p className="text-ink-2 mb-3 text-xs">Sepuluh teratas · garis kuning menunjukkan kumulatif periode</p>
+            <Grafik config={pareto} tinggi="h-[240px]" judulAksesibilitas="Pareto kontribusi omzet per varian" />
+          </section>
+          <section><h3 className="mb-3 text-sm font-semibold">Omzet per kategori</h3>
+            <Grafik config={grafikKategori} tinggi="h-[240px]" judulAksesibilitas="Omzet per kategori" />
+          </section>
+        </div>
+      </Rincian>
       </AreaData>
 
-      <Kartu className="no-print mt-4">
-        <IsiKartu className="text-ink-3 text-xs leading-relaxed">
+      <Rincian judul="Catatan laporan produk" className="no-print mt-4">
+        <div className="text-ink-2 text-xs leading-relaxed">
           <p>
             <b className="text-ink-2">Kolom % Omzet dihitung terhadap omzet
             seluruh periode</b>, bukan terhadap baris yang sedang tampil —
@@ -487,8 +467,8 @@ export default function LaporanProdukPage() {
             dikurangkan. &quot;Berapa yang terjual&quot; adalah pertanyaan yang
             berbeda dari &quot;berapa yang akhirnya tidak jadi&quot;.
           </p>
-        </IsiKartu>
-      </Kartu>
+        </div>
+      </Rincian>
     </>
   );
 }

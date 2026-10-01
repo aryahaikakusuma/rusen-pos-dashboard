@@ -3,9 +3,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
-import { IsiKartu, Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
+import { Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
 import { AreaData, Gagal, Kosong, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Tanda, Td, Th } from "@/components/dashboard/Tabel";
+import { BarisMobile, DaftarMobile, Fakta, Nilai, Rincian } from "@/components/dashboard/Ringkasan";
 import { Api } from "@/lib/api-klien";
 import {
   kelompokkanPerHari,
@@ -267,7 +268,25 @@ export default function KasPerShiftPage() {
             )} hari`}
           />
 
-          <Gulung>
+          <DaftarMobile>
+            {hariBaris.length === 0 ? <Kosong>Tidak ada hari pada rentang ini.</Kosong> : hariBaris.map((h) => (
+              <button key={h.tanggal} type="button" disabled={h.jumlahShift === 0} onClick={() => bukaHari(h)}
+                className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default disabled:text-ink-2">
+                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{tanggalPendek(h.tanggal)}{h.adaFormulaTidakCocok ? <span className="text-danger ml-1" aria-label="Perhitungan perangkat dan server berbeda">⚠</span> : null}</span>
+                  <span className="text-ink-2 mt-1 block break-words text-xs">{h.diLuarCakupan ? "Di luar cakupan" : `${angka(h.jumlahShift)} shift · ${h.kasir || "—"}`}</span></span>
+                <span className="text-right text-sm"><b className="block tabular-nums">{rupiah(h.penjualanTunai)}</b>
+                  <span className={`mt-1 block text-xs ${warnaStatusHari(h)}`}>{h.diLuarCakupan || h.jumlahShift === 0 ? "—" : labelStatusSelisih(h, rupiah) || (h.adaTidakDiketahui ? "Tidak Diketahui" : "Sesuai")}</span>
+                </span>
+              </button>
+            ))}
+            <div className="bg-brand-soft text-brand-dark px-4 py-3 text-xs">
+              <p className="mb-2 font-semibold">TOTAL {angka(baris.length)} SHIFT</p>
+              <Fakta><Nilai label="Penjualan tunai">{rupiah(total.penjualanTunai)}</Nilai>
+                <Nilai label="Kas masuk">{rupiah(total.kasMasuk)}</Nilai><Nilai label="Kas keluar">{rupiah(total.kasKeluar)}</Nilai>
+                <Nilai label="Status selisih">{totalShiftBermasalah === 0 ? "Tidak ada selisih" : `${angka(totalShiftBermasalah)} shift selisih`}</Nilai></Fakta>
+            </div>
+          </DaftarMobile>
+          <Gulung desktop>
             <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
               <thead>
                 <tr>
@@ -364,20 +383,20 @@ export default function KasPerShiftPage() {
           </Gulung>
         </Kartu>
 
-        <Kartu className="no-print mt-4">
-          <IsiKartu className="text-ink-3 text-xs leading-relaxed">
+        <Rincian judul="Catatan kas per shift" className="no-print mt-4">
+          <div className="text-ink-2 text-xs leading-relaxed">
             <p>
               <b className="text-ink-2">Refund atas order non-tunai yang dibayar dari uang laci</b>{" "}
               belum terhitung di kas seharusnya, dan dapat muncul sebagai selisih
               kurang. Ini keterbatasan yang sudah didokumentasikan di kode
               perangkat, bukan bug.
             </p>
-          </IsiKartu>
-        </Kartu>
+          </div>
+        </Rincian>
       </AreaData>
 
       {hariAktif ? (
-        <HariDrawer hari={hariAktif} onBukaShift={bukaDetail} onTutup={tutupHari} />
+        <HariDrawer hari={hariAktif} tertutupSementara={Boolean(shiftTerpilih)} onBukaShift={bukaDetail} onTutup={tutupHari} />
       ) : null}
 
       {shiftTerpilih ? (
@@ -436,10 +455,12 @@ function PeringatanYatim({
 /** Lapis 2 — Daftar Shift dalam satu hari. Isinya persis tabel per-shift lama, difilter ke satu tanggal. */
 function HariDrawer({
   hari,
+  tertutupSementara,
   onBukaShift,
   onTutup,
 }: {
   hari: BarisHari;
+  tertutupSementara: boolean;
   onBukaShift: (id: string) => void;
   onTutup: () => void;
 }) {
@@ -453,7 +474,7 @@ function HariDrawer({
   );
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-label={`Shift ${tanggalPendek(hari.tanggal)}`} aria-modal={!tertutupSementara} aria-hidden={tertutupSementara} inert={tertutupSementara}>
       <button
         type="button"
         aria-label="Tutup daftar shift"
@@ -478,7 +499,28 @@ function HariDrawer({
           </button>
         </div>
 
-        <Gulung>
+        <DaftarMobile>
+          {hari.shifts.length === 0 ? <Kosong>Tidak ada shift pada hari ini.</Kosong> : hari.shifts.map((b) =>
+            <BarisMobile key={b.shift_id} judul={b.kasir} sub={`${jamWib(b.dibuka_pada)} – ${b.ditutup_pada ? jamWib(b.ditutup_pada) : "berjalan"}`} nilai={rupiah(b.penjualan_tunai)}>
+              <Fakta>
+                <Nilai label="Modal awal">{rupiah(b.modal_awal)}</Nilai>
+                <Nilai label="Kas masuk">{rupiah(b.kas_masuk)}</Nilai>
+                <Nilai label="Kas keluar">{rupiah(b.kas_keluar)}</Nilai>
+                <Nilai label="Refund tunai">{rupiah(b.refund_tunai)}</Nilai>
+                <Nilai label="Kas seharusnya">{rupiah(b.kas_seharusnya)}</Nilai>
+                <Nilai label="Kas aktual">{b.kas_aktual === null ? "Belum ditutup" : rupiah(b.kas_aktual)}</Nilai>
+                <Nilai label="Selisih tersimpan">{b.selisih_tersimpan === null ? "Belum ditutup" : rupiah(b.selisih_tersimpan)}</Nilai>
+                {b.formula_cocok === false ? <Nilai label="Selisih hitung server">{b.selisih_hitung_server === null ? "—" : rupiah(b.selisih_hitung_server)} · berbeda dari perangkat</Nilai> : null}
+              </Fakta>
+              <button type="button" onClick={() => onBukaShift(b.shift_id)} className="border-line hover:border-brand mt-3 cursor-pointer rounded-lg border px-4 text-sm font-semibold">Lihat pergerakan kas</button>
+            </BarisMobile>)}
+          <div className="bg-brand-soft text-brand-dark px-4 py-3"><Fakta>
+            <Nilai label="Penjualan tunai hari ini">{rupiah(totalHari.penjualanTunai)}</Nilai>
+            <Nilai label="Kas masuk hari ini">{rupiah(totalHari.kasMasuk)}</Nilai>
+            <Nilai label="Kas keluar hari ini">{rupiah(totalHari.kasKeluar)}</Nilai>
+          </Fakta></div>
+        </DaftarMobile>
+        <Gulung desktop>
           <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
             <thead>
               <tr>
@@ -596,7 +638,7 @@ function DetailShift({
   const totalHalaman = Math.max(1, Math.ceil(totalBaris / limit));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-label={`Detail kas ${shift.kasir}`} aria-modal="true">
       <button
         type="button"
         aria-label="Tutup detail"
@@ -662,7 +704,13 @@ function DetailShift({
           </div>
         ) : (
           <>
-            <Gulung>
+            <DaftarMobile>
+              {baris.length === 0 ? <Kosong>Tidak ada pergerakan kas pada shift ini.</Kosong> : baris.map((m, i) =>
+                <BarisMobile key={i} judul={LABEL_JENIS[m.jenis]} sub={`${jamWib(m.waktu)} · ${m.kasir}`} nilai={<span className={m.nominal < 0 ? "text-danger" : "text-good"}>{m.nominal > 0 ? "+" : ""}{rupiah(m.nominal)}</span>}>
+                  <Fakta><Nilai label="Keterangan">{m.keterangan || "—"}</Nilai><Nilai label="No. order">{m.nomor_order || "—"}</Nilai></Fakta>
+                </BarisMobile>)}
+            </DaftarMobile>
+            <Gulung desktop>
               <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
                 <thead>
                   <tr>

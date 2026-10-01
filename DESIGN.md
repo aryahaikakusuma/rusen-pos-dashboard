@@ -34,6 +34,23 @@ Laporan Harian). Repointing them to blue would make two distinct data series vis
 indistinguishable. If the chart palette is ever revisited, it needs its own set of mutually distinct
 colors — simply following the UI chrome's blue will silently break series differentiation.
 
+## Dashboard web responsif — 1 Oktober 2026
+
+Dashboard Penjualan menempatkan dua nilai setelah refund dalam satu permukaan:
+Pendapatan tanpa PBJT dan Penerimaan termasuk PBJT. Di HP kedua nilai berupa dua
+baris, mulai 640px menjadi dua kolom. Nominal ditulis lengkap, tidak disingkat.
+Refund mengikuti tanggal pengembalian dalam WIB, termasuk nilai negatif.
+
+Analisis utama memakai tab Tren, Produk, Pembayaran, dan PBJT; Tren terbuka awal.
+Laporan menempatkan hasil sebelum grafik. Di bawah 768px, tabel laporan dan produk
+menjadi daftar ringkas dengan rincian buka-tutup; layar lebih lebar memakai tabel.
+Kontrol periode tetap satu sumber, dengan baris yang eksplisit pada HP. Statistik
+sekunder dibuka sesuai kebutuhan. Cetak membuka rincian secara otomatis, memakai
+tabel lengkap, dan mengembalikan keadaan layar setelah selesai.
+
+Pertahankan warna seri grafik yang berbeda. Jangan menyamakan tagihan sebelum
+refund, pendapatan bersih, penerimaan termasuk PBJT, dan uang tunai di laci.
+
 ## Cashier Layout (main screen)
 
 Three columns:

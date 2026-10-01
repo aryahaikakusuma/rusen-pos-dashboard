@@ -27,6 +27,10 @@ const KOLOM: (keyof TotalHarian)[] = [
   "tertagih",
   "tertagih_tunai",
   "tertagih_non_tunai",
+  "tertagih_bersih",
+  "refund_pbjt",
+  "pbjt_bersih",
+  "refund_pokok",
 ];
 
 export function totalHarian(baris: BarisHarian[]): TotalHarian {

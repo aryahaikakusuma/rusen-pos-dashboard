@@ -92,10 +92,10 @@ export default function KontrolPeriode({
   const maju = bisaMaju(periode, hariIni, aktif);
 
   return (
-    <div className="no-print border-line mb-5 rounded-2xl border bg-white px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+    <div className="no-print border-line mb-3 rounded-xl border bg-white px-3 py-2.5 sm:mb-4 sm:px-4 sm:py-3">
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
         <div
-          className="bg-surface flex gap-0.5 rounded-[10px] p-0.5"
+          className="bg-surface grid grid-cols-3 gap-0.5 rounded-[10px] p-0.5 sm:flex"
           role="group"
           aria-label="Granularitas periode"
         >
@@ -118,7 +118,7 @@ export default function KontrolPeriode({
           ))}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="grid min-w-0 grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-1 sm:flex">
           <Panah
             arah={-1}
             label="Periode sebelumnya"
@@ -137,10 +137,10 @@ export default function KontrolPeriode({
                 onClick={buka}
                 aria-expanded={terbuka}
                 aria-haspopup="dialog"
-                className="border-line text-ink hover:border-brand flex min-w-[210px] cursor-pointer items-center justify-center gap-2 rounded-[10px] border bg-white px-3.5 py-2 text-[13px] font-bold transition-colors"
+                className="border-line text-ink hover:border-brand flex w-full min-w-0 cursor-pointer items-center justify-center gap-1 rounded-[10px] border bg-white px-2 py-2 text-xs font-semibold transition-colors sm:w-auto sm:px-3.5 sm:text-[13px]"
               >
                 <span>{labelPeriode(periode)}</span>
-                <span className="text-ink-3 font-medium">
+                <span className="text-ink-3 hidden font-medium sm:inline">
                   · {jumlahHari(periode)} hari
                 </span>
                 <span className="text-ink-3 text-[10px]" aria-hidden="true">
@@ -176,16 +176,6 @@ export default function KontrolPeriode({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        {/* Bacaan mentah p_dari/p_sampai/hariIni — bukan untuk pengguna toko,
-            tapi untuk memverifikasi rentang yang sebenarnya terkirim ke fungsi
-            laporan saat sebuah preset/tab terlihat mengirim tanggal yang salah.
-            `hariIni` disertakan karena semua preset diturunkan darinya sekali
-            per pemasangan komponen — kalau ia beku di nilai lama, di sinilah
-            akan terlihat. */}
-        <p className="text-ink-3 hidden font-mono text-[10px] tabular-nums lg:block">
-          p_dari={periode.dari} p_sampai={periode.sampai} · hariIni={hariIni}
-        </p>
-
         {/* Menjawab "ini angka kapan" tanpa menggulir ke kop dokumen di bawah.
             Yang ditampilkan adalah waktu tibanya angka YANG SEDANG TAMPIL —
             jadi selama penyegaran ia tetap menunjuk data lama, sejalan dengan
@@ -218,7 +208,7 @@ function Panah({
       disabled={mati}
       aria-label={label}
       title={label}
-      className="border-line text-ink-2 hover:border-brand hover:text-brand-dark grid h-[38px] w-[38px] cursor-pointer place-items-center rounded-[10px] border bg-white text-base transition-colors disabled:cursor-not-allowed disabled:border-[#E6EAE9] disabled:text-[#C9CFCD] disabled:hover:border-[#E6EAE9]"
+      className="border-line text-ink-2 hover:border-brand hover:text-brand-dark grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-[10px] border bg-white text-base transition-colors disabled:cursor-not-allowed disabled:border-[#E6EAE9] disabled:text-[#C9CFCD] disabled:hover:border-[#E6EAE9]"
     >
       <span aria-hidden="true">{arah === -1 ? "‹" : "›"}</span>
     </button>

@@ -3,27 +3,27 @@
 import { useMemo } from "react";
 
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
+import Analisis from "@/components/dashboard/Analisis";
+import { Fakta, Nilai, Pendapatan } from "@/components/dashboard/Ringkasan";
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import {
-  BarisKpi,
   IsiKartu,
   Kartu,
   KepalaKartu,
-  Kpi,
 } from "@/components/dashboard/Kartu";
-import { Gagal, SedangMemuat } from "@/components/dashboard/Status";
+import { AreaData, Gagal, SedangMemuat } from "@/components/dashboard/Status";
 import { Api } from "@/lib/api-klien";
-import { angka, bagi, delta, persen, rupiah, rupiahRingkas } from "@/lib/format";
+import { angka, bagi, persen, rupiah, rupiahRingkas } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import { usePeriode } from "@/lib/use-periode";
 import type { BarisProduk } from "@/lib/kontrak";
-import { periodeSebelumnya, tanggalPendek } from "@/lib/periode";
+import { tanggalPendek } from "@/lib/periode";
 import { totalHarian } from "@/lib/ringkas";
 
 /**
  * Dashboard Penjualan.
  *
- * Seluruh isinya berasal dari dua fungsi Postgres: `laporan_penjualan_harian`
+ * Seluruh isinya berasal dari dua fungsi Postgres: `laporan_penjualan_harian_v2`
  * dan `laporan_produk`. Tidak ada transaksi mentah yang sampai ke browser, dan
  * tidak ada angka uang yang dihitung di sini — yang dikerjakan halaman ini
  * hanya menjumlahkan kolom yang sudah jadi dan menyusunnya jadi grafik.
@@ -54,13 +54,6 @@ export default function DashboardPage() {
   const T = useMemo(() => totalHarian(baris), [baris]);
   const S = useMemo(() => totalHarian(sebelumnya), [sebelumnya]);
 
-  // p_dari/p_sampai mentah dari periode pembanding — bukan `sebelumnya` yang
-  // datang dari API (itu barisnya, bukan rentangnya), tapi dihitung ulang di
-  // sini dengan fungsi yang SAMA persis dipakai route handler
-  // (`periodeSebelumnya`), supaya kaki KPI menunjukkan rentang yang benar-benar
-  // dikirim, bukan rentang yang dikira dikirim.
-  const pembanding = useMemo(() => periodeSebelumnya(periode), [periode]);
-
   const kategori = useMemo(() => perKategori(barisProduk), [barisProduk]);
   const terlaris = useMemo(
     () => [...barisProduk].sort((a, b) => b.terjual - a.terjual).slice(0, 6),
@@ -75,26 +68,26 @@ export default function DashboardPage() {
         datasets: [
           {
             label: "Periode ini",
-            data: baris.map((b) => b.omzet_kotor),
+            data: baris.map((b) => b.omzet_bersih),
             borderColor: WARNA.brandGaris,
             backgroundColor: WARNA.brandLembut,
             borderWidth: 3,
             fill: true,
             tension: 0.35,
-            pointRadius: 0,
+            pointRadius: baris.length === 1 ? 4 : 0,
             pointHoverRadius: 5,
           },
           {
             label: "Periode setara sebelumnya",
             // Dipotong ke panjang periode ini supaya kedua garis sejajar hari
             // ke-1 lawan hari ke-1, bukan tanggal lawan tanggal.
-            data: sebelumnya.slice(0, baris.length).map((b) => b.omzet_kotor),
+            data: sebelumnya.slice(0, baris.length).map((b) => b.omzet_bersih),
             borderColor: WARNA.abu,
             borderWidth: 2,
             borderDash: [6, 4],
             fill: false,
             tension: 0.35,
-            pointRadius: 0,
+            pointRadius: baris.length === 1 ? 4 : 0,
           },
         ],
       },
@@ -227,76 +220,30 @@ export default function DashboardPage() {
 
       {/* Rentang dan jumlah hari sudah dinyatakan kontrol di atas; yang tersisa
           di sini hanya keterangan yang tidak ada di sana. */}
-      <div className="text-ink-3 mb-5 text-sm">
+      <div className="text-ink-3 mb-3 text-xs">
         {hariAda} hari ada penjualan · data uji dikecualikan
       </div>
 
-      <BarisKpi>
-        <Kpi
-          label="Omzet Kotor"
-          nilai={rupiah(T.omzet_kotor)}
-          delta={delta(T.omzet_kotor, S.omzet_kotor)}
-          kaki={`Periode setara sebelumnya ${rupiah(S.omzet_kotor)} (p_dari=${pembanding.dari} p_sampai=${pembanding.sampai})`}
-        />
-        <Kpi
-          label="PBJT Terpungut"
-          nilai={rupiah(T.pbjt)}
-          kaki={`Atas dasar pengenaan ${rupiah(T.dasar_pbjt)}`}
-        />
-        <Kpi
-          label="Di Luar Pengenaan"
-          nilai={rupiah(T.omzet_bebas_order + T.omzet_bukan_objek)}
-          kaki={`Dibebaskan ${rupiah(T.omzet_bebas_order)} · bukan objek ${rupiah(T.omzet_bukan_objek)}`}
-        />
-        <Kpi
-          label="Transaksi"
-          nilai={angka(T.jumlah_order)}
-          delta={delta(T.jumlah_order, S.jumlah_order)}
-          kaki={`Rata-rata ${rupiah(bagi(T.omzet_kotor, T.jumlah_order))} / order`}
-        />
-        <Kpi
-          label="Masuk Laci"
-          nilai={rupiah(T.tertagih)}
-          kaki={`Tunai ${persen(bagi(T.tertagih_tunai, T.tertagih) * 100)} · non-tunai ${persen(bagi(T.tertagih_non_tunai, T.tertagih) * 100)}`}
-        />
-        <Kpi
-          label="Refund"
-          nilai={rupiah(T.total_refund)}
-          kaki={
-            T.total_refund > 0
-              ? "Dicatat pada tanggal refundnya"
-              : "Tidak ada pengembalian periode ini"
-          }
-        />
-      </BarisKpi>
-
-      <div className="mb-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+      <AreaData menyegarkan={harian.memuat}>
+      <Pendapatan total={T} sebelumnya={S} />
+      <Analisis panel={[
+        { id: "tren", judul: "Tren", isi:
         <Kartu>
           <KepalaKartu
             judul="Tren Penjualan"
-            sub="Omzet kotor per hari · dibanding periode setara sebelumnya"
+            sub="Pendapatan tanpa PBJT setelah refund · dibanding periode setara sebelumnya"
           />
           <IsiKartu>
-            <Grafik config={tren} judulAksesibilitas="Grafik tren omzet harian" />
+            <Grafik config={tren} tinggi="h-[220px] sm:h-[300px]" judulAksesibilitas="Grafik tren pendapatan bersih harian" />
+            <div className="mt-4"><Fakta>
+              <Nilai label="Penjualan sebelum refund">{rupiah(T.omzet_kotor)}</Nilai>
+              <Nilai label="Rata-rata penjualan per order">{rupiah(bagi(T.omzet_kotor, T.jumlah_order))}</Nilai>
+            </Fakta></div>
           </IsiKartu>
-        </Kartu>
-
-        <Kartu>
-          <KepalaKartu
-            judul="Komposisi Dasar Pengenaan"
-            sub="Ketiganya menjumlah tepat ke omzet kotor"
-          />
-          <IsiKartu>
-            <Grafik
-              config={komposisi}
-              judulAksesibilitas="Komposisi dasar pengenaan PBJT"
-            />
-          </IsiKartu>
-        </Kartu>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Kartu>
+        </Kartu> },
+        { id: "produk", judul: "Produk", isi: produk.galat ? <Gagal pesan={produk.galat} coba={produk.muatUlang} /> :
+      <div className="grid gap-3 lg:grid-cols-2">
+      <Kartu>
           <KepalaKartu judul="Penjualan per Kategori" sub="Dijumlahkan dari varian" />
           <IsiKartu>
             {produk.memuat && !produk.data ? (
@@ -329,18 +276,41 @@ export default function DashboardPage() {
             )}
           </IsiKartu>
         </Kartu>
-
+      </div> },
+      { id: "pembayaran", judul: "Pembayaran", isi:
         <Kartu>
-          <KepalaKartu judul="Metode Pembayaran" sub="Dari uang yang benar-benar berpindah" />
+          <KepalaKartu judul="Metode Pembayaran" sub="Tagihan pelanggan sebelum refund · termasuk PBJT" />
           <IsiKartu>
             <Grafik
               config={grafikBayar}
               tinggi="h-[230px]"
               judulAksesibilitas="Metode pembayaran"
             />
+            <Fakta>
+              <Nilai label="Tunai sebelum refund">{rupiah(T.tertagih_tunai)}</Nilai>
+              <Nilai label="Non-tunai sebelum refund">{rupiah(T.tertagih_non_tunai)}</Nilai>
+              <Nilai label="Refund periode ini">{rupiah(T.total_refund)}</Nilai>
+              <Nilai label="Penerimaan bersih termasuk PBJT">{rupiah(T.tertagih_bersih)}</Nilai>
+            </Fakta>
           </IsiKartu>
-        </Kartu>
-      </div>
+        </Kartu> },
+        { id: "pbjt", judul: "PBJT", isi:
+        <Kartu>
+          <KepalaKartu judul="Rincian PBJT" sub="Pajak terpungut dan dikembalikan pada periode ini" />
+          <IsiKartu>
+            <Fakta>
+              <Nilai label="PBJT terpungut">{rupiah(T.pbjt)}</Nilai>
+              <Nilai label="PBJT dikembalikan">{rupiah(T.refund_pbjt)}</Nilai>
+              <Nilai label="PBJT bersih setelah refund">{rupiah(T.pbjt_bersih)}</Nilai>
+              <Nilai label="Dasar pengenaan sebelum refund">{rupiah(T.dasar_pbjt)}</Nilai>
+              <Nilai label="Dibebaskan per order">{rupiah(T.omzet_bebas_order)}</Nilai>
+              <Nilai label="Bukan objek pajak">{rupiah(T.omzet_bukan_objek)}</Nilai>
+            </Fakta>
+            <div className="mt-5"><Grafik config={komposisi} tinggi="h-[240px]" judulAksesibilitas="Komposisi dasar pengenaan PBJT sebelum refund" /></div>
+          </IsiKartu>
+        </Kartu> },
+      ]} />
+      </AreaData>
     </>
   );
 }

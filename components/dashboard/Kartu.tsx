@@ -12,7 +12,7 @@ export function Kartu({
 }) {
   return (
     <div
-      className={`border-line rounded-2xl border bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.06)] ${className}`}
+      className={`border-line min-w-0 rounded-xl border bg-white ${className}`}
     >
       {children}
     </div>
@@ -29,9 +29,9 @@ export function KepalaKartu({
   aksi?: ReactNode;
 }) {
   return (
-    <div className="border-line flex items-center justify-between gap-3 border-b px-5 py-4">
+    <div className="border-line flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 sm:py-4">
       <div className="min-w-0">
-        <h3 className="text-ink truncate text-[15px] font-bold">{judul}</h3>
+        <h3 className="text-ink text-[15px] font-bold">{judul}</h3>
         {sub ? <p className="text-ink-3 mt-0.5 text-xs">{sub}</p> : null}
       </div>
       {aksi}
@@ -46,7 +46,7 @@ export function IsiKartu({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`p-5 ${className}`}>{children}</div>;
+  return <div className={`p-4 sm:p-5 ${className}`}>{children}</div>;
 }
 
 /**
@@ -125,7 +125,7 @@ export function BarisKpi({ children }: { children: ReactNode }) {
   return (
     <div
       style={{ "--kolom": kolom } as CSSProperties}
-      className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4 xl:[grid-template-columns:repeat(var(--kolom),minmax(0,1fr))]"
+      className="kpi-grille mb-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(190px,1fr))] xl:[grid-template-columns:repeat(var(--kolom),minmax(0,1fr))]"
     >
       {children}
     </div>

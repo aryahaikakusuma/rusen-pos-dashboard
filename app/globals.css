@@ -47,7 +47,7 @@
 
   --color-ink: #1b2321;
   --color-ink-2: #404545;
-  --color-ink-3: #77807e;
+  --color-ink-3: #606a68;
   --color-line: #e4e8e7;
   --color-surface: #f4f6f6;
 
@@ -57,6 +57,30 @@
   --color-good-soft: #e9f7eb;
   --color-warn: #c77700;
   --color-warn-soft: #fff6e5;
+}
+
+.pendapatan-angka { font-size: clamp(20px, 4.5vw, 28px); line-height: 1.35; overflow-wrap: anywhere; }
+.rincian > summary { list-style: none; }
+.rincian > summary::-webkit-details-marker { display: none; }
+.rincian[open] > summary .rincian-panah { transform: rotate(180deg); }
+.dashboard-app button, .dashboard-app select, .dashboard-app input:not([type="checkbox"]), .dashboard-app nav a { min-height: 44px; }
+.dashboard-app input, .dashboard-app select { max-width: 100%; }
+.dashboard-app summary:focus-visible { outline: 2px solid var(--color-primary-600); outline-offset: -2px; }
+.fakta dd { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .kpi-grille .kpi-angka { font-size: clamp(14px, 3.9vw, 20px); overflow-wrap: anywhere; }
+  .kpi-grille > div { padding: 12px; }
+  .kpi-grille > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .dashboard-filters { display: grid; grid-template-columns: minmax(0,1fr); width: 100%; }
+  .dashboard-filters input, .dashboard-filters select { width: 100%; min-width: 0; }
+}
+@media print {
+  .daftar-mobile { display: none !important; }
+  .tabel-desktop { display: block !important; }
+  .rincian::details-content { content-visibility: visible; }
+  .rincian > div { display: block !important; }
+  .rincian > summary .rincian-panah { display: none; }
+  .gulung { overflow: visible; }
 }
 
 @layer base {
@@ -151,6 +175,11 @@
   table {
     font-size: 10px;
   }
+
+  .dashboard-app { display: block !important; }
+  .dashboard-app main { padding: 0 !important; }
+  .dashboard-app th, .dashboard-app td { padding: 6px 3px; font-size: 9px; }
+  .dashboard-app th { white-space: normal; letter-spacing: 0; }
 
   thead {
     display: table-header-group;

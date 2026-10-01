@@ -32,18 +32,18 @@ export default async function HistoryPage() {
             {orders.map((order) => (
               <details
                 key={order.id}
-                className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                className="rincian overflow-hidden rounded-xl border border-line bg-white"
               >
-                <summary className="flex cursor-pointer items-center justify-between px-5 py-4 transition-colors hover:bg-slate-50">
-                  <div>
-                    <p className="font-semibold text-slate-900">
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50">
+                  <div className="min-w-0 flex-1 basis-[50%]">
+                    <p className="break-words font-semibold text-ink">
                       Meja/Order: {tableLabel(order.tableCode, order.tableSeq)}
                     </p>
                     <p className="text-sm text-slate-500">
                       {formatDateTime(order.paidAt)} · Kasir: {order.createdByName}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="max-w-full text-right tabular-nums">
                     <p className="font-bold text-slate-900">
                       {formatRupiah(order.total)}
                     </p>
@@ -56,8 +56,8 @@ export default async function HistoryPage() {
                 <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-5">
                   <div className="space-y-1.5">
                     {order.items.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span className="text-slate-700">
+                      <div key={item.id} className="flex flex-wrap justify-between gap-2 text-sm">
+                        <span className="min-w-0 flex-1 break-words text-slate-700">
                           {item.quantity}x {item.productName}
                         </span>
                         <span className="font-semibold text-slate-900">

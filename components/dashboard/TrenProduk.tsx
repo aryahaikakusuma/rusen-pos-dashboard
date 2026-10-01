@@ -201,14 +201,14 @@ export default function TrenProduk({
               {terpakai.map((k, i) => (
                 <span
                   key={k}
-                  className="border-line flex items-center gap-1.5 rounded-full border bg-white py-1 pr-1 pl-2.5 text-[12px] font-semibold"
+                  className="border-line flex max-w-full items-center gap-1.5 rounded-full border bg-white py-1 pr-1 pl-2.5 text-[12px] font-semibold"
                 >
                   <span
                     aria-hidden="true"
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: warnaSeri(i) }}
                   />
-                  <span className="text-ink-2">{nama.get(k) ?? k}</span>
+                  <span className="text-ink-2 min-w-0 break-words">{nama.get(k) ?? k}</span>
                   <button
                     type="button"
                     onClick={() => buang(k)}

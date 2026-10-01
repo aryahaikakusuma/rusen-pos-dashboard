@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
-import { BarisKpi, IsiKartu, Kartu, KepalaKartu, Kpi } from "@/components/dashboard/Kartu";
+import { IsiKartu, Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
+import { BarisMobile, DaftarMobile, Fakta, Nilai, Pendapatan, Rincian } from "@/components/dashboard/Ringkasan";
 import { AreaData, Gagal, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
 import { Api } from "@/lib/api-klien";
@@ -96,47 +97,11 @@ export default function PenjualanHarianPage() {
       {/* Kontrol periode dan tombol ekspor tetap di luar: labelnya justru yang
           sedang benar. Yang harus ditandai usang adalah angkanya. */}
       <AreaData menyegarkan={memuat}>
-      <div className="no-print">
-        <GrafikPeriode baris={baris} />
-      </div>
-
-      <div className="no-print">
-        <BarisKpi>
-          <Kpi
-            label="Omzet Kotor"
-            nilai={rupiah(T.omzet_kotor)}
-            kaki={`${angka(T.jumlah_order)} order lunas`}
-          />
-          <Kpi
-            label="Rata-rata per Hari Buka"
-            nilai={rupiah(bagi(T.omzet_kotor, hariAda))}
-            kaki={`Dari ${hariAda} hari yang ada penjualannya`}
-          />
-          <Kpi
-            label="Hari Tertinggi"
-            nilai={tertinggi?.omzet_kotor ? rupiah(tertinggi.omzet_kotor) : "—"}
-            kaki={
-              tertinggi?.omzet_kotor
-                ? `${namaHari(tertinggi.tanggal)}, ${tanggalPendek(tertinggi.tanggal)}`
-                : "Belum ada transaksi"
-            }
-          />
-          <Kpi
-            label="PBJT Terpungut"
-            nilai={rupiah(T.pbjt)}
-            kaki={`Atas dasar pengenaan ${rupiah(T.dasar_pbjt)}`}
-          />
-          <Kpi
-            label="Refund"
-            nilai={rupiah(T.total_refund)}
-            kaki="Pokok + pajaknya, pada tanggal refund"
-          />
-        </BarisKpi>
-      </div>
+      <Pendapatan total={T} />
 
       {/* Lembar laporan — inilah yang keluar saat dicetak. */}
-      <div className="border-line cetak-lepas rounded-2xl border bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.06)] lg:p-8">
-        <header className="border-ink mb-5 flex flex-wrap justify-between gap-5 border-b-2 pb-4">
+      <div className="border-line cetak-lepas rounded-xl border bg-white p-3 sm:p-6 lg:p-8">
+        <header className="border-ink mb-5 hidden flex-wrap justify-between gap-5 border-b-2 pb-4 md:flex print:flex">
           <div>
             <h2 className="text-xl font-extrabold">Laporan Penjualan</h2>
             <p className="text-ink-3 mt-1 text-[13px]">
@@ -159,7 +124,24 @@ export default function PenjualanHarianPage() {
           <h3 className="text-ink-3 mb-2.5 text-xs font-bold tracking-[0.8px] uppercase">
             Rekapitulasi per Tanggal
           </h3>
-          <Gulung>
+          <DaftarMobile>
+            {baris.map((b) => <BarisMobile key={b.tanggal} judul={tanggalPendek(b.tanggal)} sub={`${namaHari(b.tanggal)} · ${angka(b.jumlah_order)} transaksi`} nilai={rupiah(b.omzet_bersih)}>
+              <Fakta>
+                <Nilai label="Pendapatan tanpa PBJT">{rupiah(b.omzet_bersih)}</Nilai>
+                <Nilai label="Penerimaan termasuk PBJT">{rupiah(b.tertagih_bersih)}</Nilai>
+                <Nilai label="Penjualan sebelum refund">{rupiah(b.omzet_kotor)}</Nilai>
+                <Nilai label="Tagihan sebelum refund">{rupiah(b.tertagih)}</Nilai>
+                <Nilai label="Dasar PBJT">{rupiah(b.dasar_pbjt)}</Nilai>
+                <Nilai label="PBJT terpungut">{rupiah(b.pbjt)}</Nilai>
+                <Nilai label="Bebas per order">{rupiah(b.omzet_bebas_order)}</Nilai>
+                <Nilai label="Bukan objek pajak">{rupiah(b.omzet_bukan_objek)}</Nilai>
+                <Nilai label="Refund pokok + pajak">{rupiah(b.total_refund)}</Nilai>
+                <Nilai label="PBJT dikembalikan">{rupiah(b.refund_pbjt)}</Nilai>
+                <Nilai label="PBJT bersih">{rupiah(b.pbjt_bersih)}</Nilai>
+              </Fakta>
+            </BarisMobile>)}
+          </DaftarMobile>
+          <Gulung desktop>
             <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
               <thead>
                 <tr>
@@ -172,6 +154,10 @@ export default function PenjualanHarianPage() {
                   <Th num>Bukan objek</Th>
                   <Th num>Refund</Th>
                   <Th num>Tertagih</Th>
+                  <Th num className="no-print">Pendapatan Bersih</Th>
+                  <Th num className="no-print">Penerimaan Bersih</Th>
+                  <Th num className="no-print">PBJT Dikembalikan</Th>
+                  <Th num className="no-print">PBJT Bersih</Th>
                 </tr>
               </thead>
               <tbody>
@@ -204,6 +190,10 @@ export default function PenjualanHarianPage() {
                       <Td num>
                         <b>{b.tertagih ? rupiah(b.tertagih) : "—"}</b>
                       </Td>
+                      <Td num className="no-print">{rupiah(b.omzet_bersih)}</Td>
+                      <Td num className="no-print">{rupiah(b.tertagih_bersih)}</Td>
+                      <Td num className="no-print">{rupiah(b.refund_pbjt)}</Td>
+                      <Td num className="no-print">{rupiah(b.pbjt_bersih)}</Td>
                     </tr>
                   );
                 })}
@@ -219,13 +209,25 @@ export default function PenjualanHarianPage() {
                   <Td num>{rupiah(T.omzet_bukan_objek)}</Td>
                   <Td num>{rupiah(T.total_refund)}</Td>
                   <Td num>{rupiah(T.tertagih)}</Td>
+                  <Td num className="no-print">{rupiah(T.omzet_bersih)}</Td>
+                  <Td num className="no-print">{rupiah(T.tertagih_bersih)}</Td>
+                  <Td num className="no-print">{rupiah(T.refund_pbjt)}</Td>
+                  <Td num className="no-print">{rupiah(T.pbjt_bersih)}</Td>
                 </tr>
               </tfoot>
             </table>
           </Gulung>
         </section>
 
-        <section className="mb-7">
+        <section className="mb-7 hidden print:block">
+          <h3 className="mb-3 text-sm font-semibold">Pendapatan setelah refund per tanggal</h3>
+          <table className="w-full border-collapse text-xs">
+            <thead><tr><Th>Tanggal</Th><Th num>Tanpa PBJT</Th><Th num>Termasuk PBJT</Th><Th num>PBJT dikembalikan</Th><Th num>PBJT bersih</Th></tr></thead>
+            <tbody>{baris.map((b) => <tr key={b.tanggal}><Td>{tanggalPendek(b.tanggal)}</Td><Td num>{rupiah(b.omzet_bersih)}</Td><Td num>{rupiah(b.tertagih_bersih)}</Td><Td num>{rupiah(b.refund_pbjt)}</Td><Td num>{rupiah(b.pbjt_bersih)}</Td></tr>)}</tbody>
+            <tfoot><tr className="font-bold"><Td>TOTAL</Td><Td num>{rupiah(T.omzet_bersih)}</Td><Td num>{rupiah(T.tertagih_bersih)}</Td><Td num>{rupiah(T.refund_pbjt)}</Td><Td num>{rupiah(T.pbjt_bersih)}</Td></tr></tfoot>
+          </table>
+        </section>
+        <Rincian polos judul="Pemisahan dasar pengenaan dan rincian PBJT">
           <h3 className="text-ink-3 mb-2.5 text-xs font-bold tracking-[0.8px] uppercase">
             Pemisahan Dasar Pengenaan
           </h3>
@@ -237,7 +239,7 @@ export default function PenjualanHarianPage() {
               utama
               rincian={[
                 ["Dasar pengenaan", rupiah(T.dasar_pbjt)],
-                ["PBJT terutang", rupiah(T.pbjt)],
+                ["PBJT terpungut sebelum refund", rupiah(T.pbjt)],
               ]}
             />
             <Kotak
@@ -261,12 +263,16 @@ export default function PenjualanHarianPage() {
           </div>
 
           <div className="bg-brand-soft text-brand-dark mt-4 flex flex-wrap justify-between gap-3 rounded-[10px] px-4 py-3.5 text-[15px] font-extrabold">
-            <span>PBJT yang harus disetor periode ini</span>
-            <span>{rupiah(T.pbjt)}</span>
+            <span>PBJT bersih setelah refund</span>
+            <span>{rupiah(T.pbjt_bersih)}</span>
           </div>
-        </section>
+          <div className="mt-3"><Fakta>
+            <Nilai label="PBJT terpungut">{rupiah(T.pbjt)}</Nilai>
+            <Nilai label="PBJT dikembalikan">{rupiah(T.refund_pbjt)}</Nilai>
+          </Fakta></div>
+        </Rincian>
 
-        <section className="mb-7">
+        <Rincian polos judul="Rekonsiliasi penerimaan">
           <h3 className="text-ink-3 mb-2.5 text-xs font-bold tracking-[0.8px] uppercase">
             Rekonsiliasi Penerimaan
           </h3>
@@ -292,19 +298,19 @@ export default function PenjualanHarianPage() {
               </tr>
               <tr className="bg-brand-soft">
                 <Td>
-                  <b>Bersih masuk laci</b>
+                  <b>Penerimaan bersih termasuk PBJT</b>
                 </Td>
                 <Td num>
                   <b className="text-brand-dark">
-                    {rupiah(T.tertagih - T.total_refund)}
+                    {rupiah(T.tertagih_bersih)}
                   </b>
                 </Td>
               </tr>
             </tbody>
           </table>
-        </section>
+        </Rincian>
 
-        <section>
+        <Rincian polos judul="Catatan laporan">
           <h3 className="text-ink-3 mb-2.5 text-xs font-bold tracking-[0.8px] uppercase">
             Catatan
           </h3>
@@ -327,13 +333,20 @@ export default function PenjualanHarianPage() {
               item. Menjumlahkan per baris menghasilkan angka yang berbeda.
             </li>
           </ol>
-        </section>
+        </Rincian>
 
         <p className="border-line text-ink-3 mt-5 border-t pt-3.5 text-center text-[11px]">
           Dokumen internal Rusen Kopitiam · {labelPeriode(periode)} · dibuat{" "}
           {sekarangWib()}
         </p>
       </div>
+      <Rincian judul="Grafik dan statistik penjualan" className="no-print mt-4">
+        <Fakta>
+          <Nilai label="Rata-rata penjualan per hari buka">{rupiah(bagi(T.omzet_kotor, hariAda))}</Nilai>
+          <Nilai label="Hari penjualan tertinggi">{tertinggi?.omzet_kotor ? `${tanggalPendek(tertinggi.tanggal)} · ${rupiah(tertinggi.omzet_kotor)}` : "Belum ada transaksi"}</Nilai>
+        </Fakta>
+        <div className="mt-4"><GrafikPeriode baris={baris} /></div>
+      </Rincian>
       </AreaData>
     </>
   );
@@ -362,9 +375,9 @@ export default function PenjualanHarianPage() {
  * Keduanya butuh perubahan database, dan itu urusan Tahap 1.
  */
 const DERET = [
-  { id: "penjualan", label: "Penjualan", warna: WARNA.brandGaris, uang: true },
-  { id: "tertagih", label: "Tertagih", warna: WARNA.biru, uang: true },
-  { id: "pbjt", label: "PBJT", warna: WARNA.kuning, uang: true },
+  { id: "penjualan", label: "Penjualan sebelum refund", warna: WARNA.brandGaris, uang: true },
+  { id: "tertagih", label: "Tagihan sebelum refund", warna: WARNA.biru, uang: true },
+  { id: "pbjt", label: "PBJT terpungut", warna: WARNA.kuning, uang: true },
   { id: "refund", label: "Refund", warna: WARNA.merah, uang: true },
   { id: "transaksi", label: "Transaksi", warna: WARNA.abuTua, uang: false },
 ] as const;

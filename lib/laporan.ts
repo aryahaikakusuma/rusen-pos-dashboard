@@ -17,7 +17,8 @@ import { db } from "./supabase/server";
 /**
  * Satu-satunya jalur perhitungan laporan.
  *
- * Tiga fungsi di bawah memanggil tiga fungsi Postgres dari `0027`, satu-ke-satu,
+ * Tiga fungsi di bawah memanggil harian v3 (`0036`) serta detail dan produk
+ * (`0027`), satu-ke-satu,
  * tanpa menghitung apa pun sendiri. Layar dan berkas xlsx sama-sama lewat sini,
  * jadi tidak ada dua jalur angka yang bisa berbeda. Kalau bentuk keluarannya
  * kurang untuk sebuah tampilan, yang berubah adalah fungsi Postgres-nya —
@@ -37,11 +38,11 @@ export type {
 } from "./kontrak";
 
 export async function laporanHarian(periode: Periode): Promise<BarisHarian[]> {
-  const { data, error } = await db.rpc("laporan_penjualan_harian", {
+  const { data, error } = await db.rpc("laporan_penjualan_harian_v3", {
     p_dari: periode.dari,
     p_sampai: periode.sampai,
   });
-  if (error) throw new Error(`laporan_penjualan_harian gagal: ${error.message}`);
+  if (error) throw new Error(`laporan_penjualan_harian_v3 gagal: ${error.message}`);
   return (data ?? []) as BarisHarian[];
 }
 

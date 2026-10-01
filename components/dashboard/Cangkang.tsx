@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { logout } from "@/app/login/actions";
 import { usePeriode } from "@/lib/use-periode";
@@ -38,6 +38,21 @@ export default function Cangkang({
   const [bukaMenu, setBukaMenu] = useState(false);
   const { periode } = usePeriode();
 
+  useEffect(() => {
+    let tertutup: HTMLDetailsElement[] = [];
+    let mencetak = false;
+    const sebelum = () => {
+      if (mencetak) return;
+      mencetak = true;
+      tertutup = Array.from(document.querySelectorAll<HTMLDetailsElement>("details:not([open])"));
+      tertutup.forEach((d) => { d.open = true; });
+    };
+    const sesudah = () => { tertutup.forEach((d) => { d.open = false; }); tertutup = []; mencetak = false; };
+    window.addEventListener("beforeprint", sebelum);
+    window.addEventListener("afterprint", sesudah);
+    return () => { window.removeEventListener("beforeprint", sebelum); window.removeEventListener("afterprint", sesudah); };
+  }, []);
+
   const inisial = email.slice(0, 2).toUpperCase();
 
   /**
@@ -57,7 +72,7 @@ export default function Cangkang({
       : href;
 
   return (
-    <div className="bg-surface text-ink min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="dashboard-app bg-surface text-ink min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
       <aside
         className={`border-line sticky top-0 z-50 flex h-screen flex-col overflow-y-auto border-r bg-white lg:z-auto ${
           bukaMenu ? "fixed inset-y-0 left-0 w-[260px]" : "hidden lg:flex"
@@ -138,7 +153,7 @@ export default function Cangkang({
       ) : null}
 
       <div className="min-w-0">
-        <header className="border-line no-print sticky top-0 z-40 flex flex-wrap items-center gap-3.5 border-b bg-white px-5 py-3 lg:px-7">
+        <header className="border-line no-print sticky top-0 z-40 flex items-center gap-3 border-b bg-white px-4 py-2 lg:px-7 lg:py-3">
           <button
             type="button"
             onClick={() => setBukaMenu(true)}
@@ -148,7 +163,7 @@ export default function Cangkang({
             ☰
           </button>
 
-          <h1 className="text-[19px] font-extrabold tracking-[-0.4px]">
+          <h1 className="min-w-0 text-base font-bold sm:text-[19px]">
             {judulHalaman(pathname)}
           </h1>
 
@@ -168,7 +183,7 @@ export default function Cangkang({
           </div>
         </header>
 
-        <main className="px-5 pt-6 pb-16 lg:px-7">{children}</main>
+        <main className="min-w-0 px-3 pt-3 pb-10 sm:px-5 sm:pt-5 lg:px-7">{children}</main>
       </div>
     </div>
   );

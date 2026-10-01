@@ -268,8 +268,10 @@ export default function RentangTanggal({
 
       {buka ? (
         <div
-          className={`border-line absolute top-full z-60 mt-2 w-[min(92vw,780px)] overflow-hidden rounded-2xl border bg-white shadow-[0_24px_64px_rgba(16,24,40,.18)] ${
-            arah === "kiri" ? "left-0" : "right-0"
+          role="dialog"
+          aria-label="Pilih rentang tanggal"
+          className={`border-line fixed inset-x-3 top-20 z-60 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-xl border bg-white shadow-[0_24px_64px_rgba(16,24,40,.18)] sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:w-[min(92vw,780px)] ${
+            arah === "kiri" ? "sm:left-0" : "sm:right-0"
           }`}
         >
           <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr]">

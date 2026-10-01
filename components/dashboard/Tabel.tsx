@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 /** Potongan tabel yang dipakai berulang di tiga halaman laporan. */
 
-export function Gulung({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+export function Gulung({ children, desktop = false }: { children: ReactNode; desktop?: boolean }) {
+  return <div className={`gulung min-w-0 overflow-x-auto ${desktop ? "tabel-desktop hidden md:block" : ""}`}>{children}</div>;
 }
 
 /**

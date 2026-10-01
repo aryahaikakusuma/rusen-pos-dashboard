@@ -9,7 +9,8 @@
  * pada penghapusan itu berarti satu `import` yang lupa diberi `type` cukup
  * untuk menggagalkan build dengan pesan yang jauh dari sebabnya.
  *
- * Bentuknya mengikuti keluaran tiga fungsi Postgres di `0027` satu-ke-satu.
+ * Bentuknya mengikuti keluaran fungsi Postgres: harian v3 (`0036`), detail
+ * dan produk (`0027`). Kolom lama harian tetap kompatibel dengan v1.
  * Kalau salah satu fungsi itu berubah, berkas ini yang pertama harus menyusul.
  *
  * Semua kolom uang bertipe `bigint` di Postgres dan dikirim PostgREST sebagai
@@ -33,6 +34,12 @@ export interface BarisHarian {
   tertagih: number;
   tertagih_tunai: number;
   tertagih_non_tunai: number;
+  /** Penerimaan termasuk PBJT setelah seluruh refund pada tanggal refund. */
+  tertagih_bersih: number;
+  refund_pbjt: number;
+  pbjt_bersih: number;
+  /** Pokok refund tanpa pajak, pada tanggal pengembalian WIB. */
+  refund_pokok: number;
 }
 
 export interface BarisDetail {
