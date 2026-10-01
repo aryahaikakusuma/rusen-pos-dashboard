@@ -109,7 +109,7 @@ export default function KontrolPeriode({
               }
               className={`cursor-pointer rounded-lg px-3.5 py-2 text-[13px] transition-colors ${
                 aktif === id
-                  ? "text-ink bg-white font-bold shadow-[0_1px_3px_rgba(16,24,40,.14)]"
+                  ? "text-brand-dark bg-brand-soft font-semibold"
                   : "text-ink-2 hover:text-ink font-medium"
               }`}
             >

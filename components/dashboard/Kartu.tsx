@@ -2,7 +2,7 @@ import { Children, type CSSProperties, type ReactNode } from "react";
 
 import { persen } from "@/lib/format";
 
-/** Permukaan dasar seluruh dashboard: putih, garis tipis, bayangan sangat halus. */
+/** Permukaan dasar seluruh dashboard: putih dengan satu garis tipis. */
 export function Kartu({
   children,
   className = "",
@@ -31,7 +31,7 @@ export function KepalaKartu({
   return (
     <div className="border-line flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 sm:py-4">
       <div className="min-w-0">
-        <h3 className="text-ink text-[15px] font-bold">{judul}</h3>
+        <h3 className="text-ink text-[15px] font-semibold">{judul}</h3>
         {sub ? <p className="text-ink-3 mt-0.5 text-xs">{sub}</p> : null}
       </div>
       {aksi}

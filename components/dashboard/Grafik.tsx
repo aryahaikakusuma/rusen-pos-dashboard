@@ -45,18 +45,18 @@ Chart.register(
 );
 
 Chart.defaults.font.family =
-  "var(--ff-poppins), system-ui, sans-serif";
+  "Inter, system-ui, sans-serif";
 Chart.defaults.color = "#606A68";
 
 export const WARNA = {
-  brand: "#04C99E",
-  brandGaris: "#36D4B1",
-  brandLembut: "rgba(54,212,177,.12)",
-  abu: "#B7BFBD",
+  brand: "#2563EB",
+  brandGaris: "#2563EB",
+  brandLembut: "rgba(37,99,235,.08)",
+  abu: "#77807E",
   abuTua: "#77807E",
   kuning: "#C77700",
   merah: "#DF2A36",
-  biru: "#2563EB",
+  pembanding: "#7C3AED",
   kisi: "#EFF1F1",
 } as const;
 
@@ -75,6 +75,7 @@ export default function Grafik({
 
   useEffect(() => {
     if (!kanvas.current) return;
+    Chart.defaults.font.family = getComputedStyle(kanvas.current).fontFamily;
 
     // Instance dibuat sekali lalu diperbarui, tidak dibongkar-pasang tiap kali
     // datanya berganti — membongkar akan mengulang animasi masuk setiap kali

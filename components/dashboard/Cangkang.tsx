@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { logout } from "@/app/login/actions";
 import { usePeriode } from "@/lib/use-periode";
+import Ikon from "./Ikon";
 import {
   LAINNYA,
   LAPORAN,
@@ -37,6 +38,15 @@ export default function Cangkang({
   const pathname = usePathname();
   const [bukaMenu, setBukaMenu] = useState(false);
   const { periode } = usePeriode();
+
+  useEffect(() => {
+    if (!bukaMenu) return;
+    const tutup = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBukaMenu(false);
+    };
+    window.addEventListener("keydown", tutup);
+    return () => window.removeEventListener("keydown", tutup);
+  }, [bukaMenu]);
 
   useEffect(() => {
     let tertutup: HTMLDetailsElement[] = [];
@@ -74,18 +84,20 @@ export default function Cangkang({
   return (
     <div className="dashboard-app bg-surface text-ink min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
       <aside
-        className={`border-line sticky top-0 z-50 flex h-screen flex-col overflow-y-auto border-r bg-white lg:z-auto ${
+        aria-label="Navigasi utama"
+        className={`dashboard-sidebar top-0 z-50 flex h-screen flex-col overflow-y-auto bg-navigation text-white lg:sticky lg:z-auto ${
           bukaMenu ? "fixed inset-y-0 left-0 w-[260px]" : "hidden lg:flex"
         } no-print`}
       >
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-          <div className="from-brand to-brand-dark grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-gradient-to-br font-extrabold text-white">
+          <div className="grid h-9 w-9 place-items-center rounded-lg border border-white/40 font-semibold text-white">
             R
           </div>
           <div>
-            <p className="font-extrabold tracking-[-0.3px]">Rusen POS</p>
-            <p className="text-ink-3 text-[11px] font-medium">Manager Console</p>
+            <p className="text-base font-semibold">Rusen POS</p>
+            <p className="text-navigation-muted text-xs">Rusen Kopitiam</p>
           </div>
+          <button type="button" aria-label="Tutup navigasi" onClick={() => setBukaMenu(false)} className="ml-auto grid w-11 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-navigation-active lg:hidden"><Ikon nama="tutup" /></button>
         </div>
 
         <nav className="flex flex-col gap-0.5 px-3 pb-2">
@@ -101,19 +113,20 @@ export default function Cangkang({
           ))}
 
           <Label>LAPORAN PENJUALAN</Label>
-          <div className="border-line ml-3 flex flex-col gap-0.5 border-l-2 pl-2.5">
+          <div className="flex flex-col gap-0.5">
             {LAPORAN.map((tautan) => (
               <Link
                 key={tautan.href}
                 href={tautanPeriode(tautan.href)}
                 onClick={() => setBukaMenu(false)}
-                className={`rounded-lg px-3 py-2 text-[13px] transition-colors ${
+                aria-current={pathname === tautan.href ? "page" : undefined}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
                   pathname === tautan.href
-                    ? "bg-brand-soft text-brand-dark font-bold"
-                    : "text-ink-2 hover:bg-surface font-medium"
+                    ? "bg-navigation-active text-white font-semibold"
+                    : "text-white hover:bg-navigation-active font-medium"
                 }`}
               >
-                {tautan.label}
+                <Ikon nama={tautan.ikon} className="shrink-0" />{tautan.label}
               </Link>
             ))}
           </div>
@@ -130,12 +143,12 @@ export default function Cangkang({
           ))}
         </nav>
 
-        <div className="border-line mt-auto border-t p-4">
-          <p className="text-ink-3 truncate text-[11px] font-medium">{email}</p>
+        <div className="mt-auto border-t border-white/20 p-4">
+          <p className="text-navigation-muted truncate text-xs">{email}</p>
           <form action={logout}>
             <button
               type="submit"
-              className="border-line text-ink-2 hover:border-brand hover:text-brand-dark mt-2 w-full cursor-pointer rounded-lg border px-3 py-2 text-[13px] font-semibold transition-colors"
+              className="mt-2 w-full cursor-pointer rounded-lg border border-white/40 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-navigation-active"
             >
               Keluar
             </button>
@@ -160,10 +173,10 @@ export default function Cangkang({
             aria-label="Buka menu"
             className="border-line text-ink-2 cursor-pointer rounded-lg border px-3 py-2 lg:hidden"
           >
-            ☰
+            <Ikon nama="menu" />
           </button>
 
-          <h1 className="min-w-0 text-base font-bold sm:text-[19px]">
+          <h1 className="min-w-0 text-base font-semibold sm:text-[19px]">
             {judulHalaman(pathname)}
           </h1>
 
@@ -191,7 +204,7 @@ export default function Cangkang({
 
 function Label({ children }: { children: ReactNode }) {
   return (
-    <p className="text-ink-3 px-2.5 pt-3.5 pb-1.5 text-[10px] font-bold tracking-[0.8px]">
+    <p className="text-navigation-muted px-3 pt-5 pb-2 text-[11px] font-medium">
       {children}
     </p>
   );
@@ -212,15 +225,14 @@ function Item({
     <Link
       href={href}
       onClick={onKlik}
+      aria-current={aktif ? "page" : undefined}
       className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 whitespace-nowrap transition-colors ${
         aktif
-          ? "bg-brand-soft text-brand-dark font-semibold"
-          : "text-ink-2 hover:bg-surface font-medium"
+          ? "bg-navigation-active text-white font-semibold"
+          : "text-white hover:bg-navigation-active font-medium"
       }`}
     >
-      <span className="w-5 flex-none" aria-hidden="true">
-        {tautan.ikon}
-      </span>
+      <Ikon nama={tautan.ikon} className="shrink-0" />
       {tautan.label}
     </Link>
   );

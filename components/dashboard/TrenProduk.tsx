@@ -288,7 +288,7 @@ export default function TrenProduk({
  * lalu menggambar dua produk dengan warna identik.
  */
 function warnaSeri(i: number): string {
-  const tetap = [WARNA.brand, WARNA.biru, WARNA.kuning, WARNA.merah];
+  const tetap = [WARNA.brand, WARNA.pembanding, WARNA.kuning, WARNA.merah];
   if (i < tetap.length) return tetap[i];
   return `hsl(${(i * 137.5) % 360} 62% 45%)`;
 }

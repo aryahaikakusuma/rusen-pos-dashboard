@@ -18,7 +18,7 @@ export default function Analisis({ panel }: { panel: { id: string; judul: string
               const ke = e.key === "Home" ? 0 : e.key === "End" ? panel.length - 1 : arah ? (i + arah + panel.length) % panel.length : null;
               if (ke !== null) { e.preventDefault(); setAktif(panel[ke].id); tombol.current[ke]?.focus(); }
             }}
-            className={`min-h-12 cursor-pointer border-b-2 px-1 text-xs font-semibold sm:text-sm ${aktif === p.id ? "border-brand text-brand-dark" : "border-transparent text-ink-2 hover:text-ink"}`}>
+            className={`min-h-12 cursor-pointer rounded-t-lg border-b-2 px-1 text-xs font-medium transition-colors sm:text-sm ${aktif === p.id ? "border-brand bg-brand-soft text-brand-dark" : "border-transparent text-ink-2 hover:bg-white hover:text-ink"}`}>
             {p.judul}
           </button>
         ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Ikon from "./Ikon";
 
 import { useToast } from "@/components/Toast";
 import { Api } from "@/lib/api-klien";
@@ -54,7 +55,7 @@ export default function TombolUnduh({
           Menyiapkan…
         </>
       ) : (
-        <>⬇ Unduh Excel</>
+        <><Ikon nama="unduh" /> Unduh Excel</>
       )}
     </button>
   );

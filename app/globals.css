@@ -29,21 +29,15 @@
   --color-login-accent: #059669;
   --color-login-muted: #10192e;
 
-  /* ------------------------------------------------------------------
-     Dashboard manajer.
-     Sampai 2026-08-14 palet ini sengaja teal, berbeda dari biru primer di
-     atas — alasannya DESIGN.md mengunci biru untuk satu tombol aksi utama di
-     layar kasir, dan dashboard tidak punya masalah "dua tombol menarik jari"
-     yang sama karena tidak ada transaksi yang bisa dirusak salah pencet.
-     Keputusan sadar Heika mengubahnya balik ke biru primer supaya dashboard
-     dan cashier app konsisten satu palet — lihat DESIGN.md § Warna dashboard
-     manajer. Nilainya menunjuk langsung ke --color-primary-*, bukan hex baru,
-     supaya kedua permukaan tetap satu sumber kebenaran warna.
-     ------------------------------------------------------------------ */
+  /* Satu palet biru untuk navigasi, aksi, tab, filter, dan fokus dashboard.
+     Layout Majoo dipertahankan; warna memakai identitas primer Rusen. */
   --color-brand: var(--color-primary-600);
   --color-brand-dark: var(--color-primary-700);
-  --color-brand-soft: var(--color-primary-100);
+  --color-brand-soft: var(--color-primary-50);
   --color-brand-line: var(--color-primary-500);
+  --color-navigation: var(--color-primary-600);
+  --color-navigation-active: var(--color-primary-700);
+  --color-navigation-muted: var(--color-primary-50);
 
   --color-ink: #1b2321;
   --color-ink-2: #404545;
@@ -55,7 +49,7 @@
   --color-danger-soft: #fdecee;
   --color-good: #1f7a2b;
   --color-good-soft: #e9f7eb;
-  --color-warn: #c77700;
+  --color-warn: #995b00;
   --color-warn-soft: #fff6e5;
 }
 
@@ -65,14 +59,18 @@
 .rincian[open] > summary .rincian-panah { transform: rotate(180deg); }
 .dashboard-app button, .dashboard-app select, .dashboard-app input:not([type="checkbox"]), .dashboard-app nav a { min-height: 44px; }
 .dashboard-app input, .dashboard-app select { max-width: 100%; }
-.dashboard-app summary:focus-visible { outline: 2px solid var(--color-primary-600); outline-offset: -2px; }
+.dashboard-app { font-family: var(--font-inter); font-size: 13px; }
+.dashboard-app :is(button, a, input, select, summary, [role="tabpanel"]):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.dashboard-sidebar :is(button, a):focus-visible { outline-color: white; outline-offset: -3px; }
+.dashboard-app input[type="checkbox"] { accent-color: var(--color-brand); }
 .fakta dd { overflow-wrap: anywhere; }
 @media (max-width: 767px) {
   .kpi-grille .kpi-angka { font-size: clamp(14px, 3.9vw, 20px); overflow-wrap: anywhere; }
   .kpi-grille > div { padding: 12px; }
   .kpi-grille > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .dashboard-filters { display: grid; grid-template-columns: minmax(0,1fr); width: 100%; }
-  .dashboard-filters input, .dashboard-filters select { width: 100%; min-width: 0; }
+  .dashboard-filters input:not([type="checkbox"]), .dashboard-filters select { width: 100%; min-width: 0; }
+  .dashboard-filters label { min-height: 44px; }
 }
 @media print {
   .daftar-mobile { display: none !important; }

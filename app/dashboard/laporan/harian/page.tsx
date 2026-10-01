@@ -376,7 +376,7 @@ export default function PenjualanHarianPage() {
  */
 const DERET = [
   { id: "penjualan", label: "Penjualan sebelum refund", warna: WARNA.brandGaris, uang: true },
-  { id: "tertagih", label: "Tagihan sebelum refund", warna: WARNA.biru, uang: true },
+  { id: "tertagih", label: "Tagihan sebelum refund", warna: WARNA.pembanding, uang: true },
   { id: "pbjt", label: "PBJT terpungut", warna: WARNA.kuning, uang: true },
   { id: "refund", label: "Refund", warna: WARNA.merah, uang: true },
   { id: "transaksi", label: "Transaksi", warna: WARNA.abuTua, uang: false },
@@ -607,4 +607,3 @@ function Kotak({
     </div>
   );
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import TombolUnduh from "./TombolUnduh";
+import Ikon from "./Ikon";
 import type { Periode } from "@/lib/kontrak";
 
 /**
@@ -34,9 +35,10 @@ export default function AksiLaporan({
         type="button"
         onClick={() => window.print()}
         title="Cetak halaman ini atau simpan sebagai PDF"
-        className="border-line text-ink-2 hover:border-brand hover:text-brand-dark cursor-pointer rounded-[10px] border bg-white px-3 py-2 text-[13px] font-semibold transition-colors sm:px-4 sm:py-2.5"
+        aria-label="Cetak atau simpan PDF"
+        className="border-line text-ink-2 hover:border-brand hover:text-brand-dark flex cursor-pointer items-center rounded-lg border bg-white px-3 py-2 text-[13px] font-medium transition-colors sm:px-4 sm:py-2.5"
       >
-        <span aria-hidden="true">🖨</span>
+        <Ikon nama="cetak" />
         <span className="ml-1.5 hidden sm:inline">Cetak / PDF</span>
       </button>
       <TombolUnduh jenis={jenis} periode={periode} />

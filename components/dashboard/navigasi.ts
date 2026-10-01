@@ -11,30 +11,32 @@
  * grain-nya berbeda di kepala migrasi itu.
  */
 
+import type { NamaIkon } from "./Ikon";
+
 export interface Tautan {
   href: string;
   label: string;
-  ikon: string;
+  ikon: NamaIkon;
 }
 
 export const MENU: Tautan[] = [
-  { href: "/dashboard", label: "Dashboard Penjualan", ikon: "📊" },
-  { href: "/dashboard/produk", label: "Kelola Produk", ikon: "📦" },
+  { href: "/dashboard", label: "Dashboard Penjualan", ikon: "grafik" },
+  { href: "/dashboard/produk", label: "Kelola Produk", ikon: "produk" },
 ];
 
 export const LAPORAN: Tautan[] = [
   {
     href: "/dashboard/laporan/harian",
     label: "Penjualan per Periode",
-    ikon: "📅",
+    ikon: "kalender",
   },
-  { href: "/dashboard/laporan/detail", label: "Detail Penjualan", ikon: "🧾" },
-  { href: "/dashboard/laporan/produk", label: "Laporan Produk", ikon: "📦" },
-  { href: "/dashboard/laporan/kas-shift", label: "Kas per Shift", ikon: "💵" },
+  { href: "/dashboard/laporan/detail", label: "Detail Penjualan", ikon: "struk" },
+  { href: "/dashboard/laporan/produk", label: "Laporan Produk", ikon: "produk" },
+  { href: "/dashboard/laporan/kas-shift", label: "Kas per Shift", ikon: "kas" },
 ];
 
 export const LAINNYA: Tautan[] = [
-  { href: "/history", label: "Histori Transaksi", ikon: "🕘" },
+  { href: "/history", label: "Histori Transaksi", ikon: "histori" },
 ];
 
 const JUDUL: Record<string, string> = {

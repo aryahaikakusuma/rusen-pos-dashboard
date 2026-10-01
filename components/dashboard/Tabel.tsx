@@ -29,7 +29,7 @@ export function Th({
   return (
     <th
       scope="col"
-      className={`border-line text-ink-3 border-b px-3.5 py-3 text-[11px] font-bold tracking-[0.5px] whitespace-nowrap uppercase ${
+      className={`border-line bg-surface text-ink-2 border-b px-3.5 py-3 text-xs font-medium whitespace-nowrap ${
         num ? "text-right" : "text-left"
       } ${className}`}
     >

@@ -16,8 +16,8 @@ export function Pendapatan({ total, sebelumnya }: { total: TotalHarian; sebelumn
           const perubahan = v.lalu === undefined || v.lalu <= 0 ? null : delta(v.jumlah, v.lalu);
           return (
             <div key={v.label} className="min-w-0 px-4 py-3 sm:px-5 sm:py-5">
-              <p className="text-ink-2 text-xs font-medium">{v.label}</p>
-              <p className="pendapatan-angka mt-1 font-bold tabular-nums">{rupiah(v.jumlah)}</p>
+              <p className="text-ink-2 text-[13px] font-medium">{v.label}</p>
+              <p className="pendapatan-angka mt-1 font-semibold tabular-nums">{rupiah(v.jumlah)}</p>
               {perubahan !== null ? (
                 <p className="text-ink-2 mt-1 text-xs">
                   {perubahan >= 0 ? "Naik" : "Turun"} {persen(Math.abs(perubahan))} dari periode sebelumnya

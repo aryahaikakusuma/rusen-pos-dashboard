@@ -6,7 +6,7 @@ Layout is based on the Majoo application (a common tablet-based POS reference fo
 
 ## Typography
 
-Primary font: Poppins, used throughout the UI (cashier, reports, attendance). No secondary font for receipts — printed receipts use the thermal printer's built-in monospace font, outside the control of web styling.
+Primary font: Poppins for the cashier app. The manager web dashboard uses the existing Inter font for compact tables and consistent numeric reading, following the Majoo reference approved on 1 October 2026. Printed receipts use the thermal printer's built-in monospace font, outside the control of web styling.
 
 ## Colors
 
@@ -15,24 +15,25 @@ Primary font: Poppins, used throughout the UI (cashier, reports, attendance). No
 - Order status uses semantic colors: awaiting payment = warning (yellow/amber), paid = success (dark green/teal), void = neutral/muted red.
 - Clean background, white/light neutral, without excessive gradients or shadows. Flat surfaces.
 
-### Dashboard manajer (web) — same primary blue as the cashier app
+### Dashboard manajer (web) — biru Rusen, layout Majoo, 1 Oktober 2026
 
-Until 2026-08-14 the manager dashboard (`/dashboard/*` in the root Next.js app) intentionally used
-a separate teal/mint palette instead of the primary blue above. The reasoning at the time: blue was
-reserved for the cashier's one primary action button so nothing competed with it during a rush, and
-the dashboard has no such button to protect — it's read-heavy screens full of numbers that need
-telling apart. That reasoning was sound, but Heika decided the two surfaces should look like one
-product rather than two, so the dashboard now points at the same `--color-primary-*` tokens as the
-cashier app (`app/globals.css`, `--color-brand` and friends resolve to `--color-primary-600` etc.,
-not a separate hex).
+Heika menyetujui perapian mengikuti audit langsung Majoo: sidebar berwarna, konten
+putih/abu-abu, ikon garis, statistik ringkas, dan format tabel yang seragam.
+Setelah melihat versi teal, Heika memilih kembali biru Rusen dengan penerapan
+merata seperti versi teal. Layout, Inter, ikon garis, dan perbaikan HP tetap.
+Navigasi dan aksi utama memakai primary-600 (#2563EB), menu aktif/hover
+primary-700 (#1D4ED8), dan permukaan terpilih primary-50 (#EFF6FF).
+Tab, kalender, checkbox, tombol unduh, dan fokus keyboard memakai token brand
+yang sama. Aturan warna kasir mobile tetap seperti di atas.
 
-**One deliberate exception:** the chart color palette (`WARNA` in `components/dashboard/Grafik.tsx`)
-still uses the old teal hex values for `brand`/`brandGaris`/`brandLembut`, unchanged. Those aren't UI
-chrome — they're series colors in multi-line/bar charts that also use `WARNA.biru` (the same blue as
-the new brand color) as a *different* series in the same chart (e.g. "Penjualan" vs. "Tertagih" in
-Laporan Harian). Repointing them to blue would make two distinct data series visually
-indistinguishable. If the chart palette is ever revisited, it needs its own set of mutually distinct
-colors — simply following the UI chrome's blue will silently break series differentiation.
+Warna seri grafik tetap berbeda: biru untuk penjualan, ungu untuk tagihan,
+abu-abu untuk periode pembanding, amber dan merah sesuai arti datanya.
+Angka uang memakai digit tabular; statistik sekunder berbagi satu permukaan
+dengan pembatas tipis. Kontrol sentuh tetap minimal 44px.
+
+Perapian ini hanya presentasi. API, RPC, definisi pendapatan, refund, dan basis
+tanggal tidak berubah; tidak ada migrasi atau perubahan transaksi. Label
+Majoo seperti “Penjualan Bersih” tidak disalin bila definisinya berbeda.
 
 ## Dashboard web responsif — 1 Oktober 2026
 
