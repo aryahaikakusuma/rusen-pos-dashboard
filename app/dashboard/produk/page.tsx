@@ -398,8 +398,6 @@ function FormProduk({
       true
   );
 
-  const kategoriTerpilih = kategori.find((k) => k.id === categoryId);
-
   return (
     <Lapis onTutup={onTutup}>
       <form
@@ -441,11 +439,10 @@ function FormProduk({
             />
             {/* Kode di Rusen berasal dari ekspor spreadsheet dan berserakan di
                 K1xx, K2xx, R0xx. Tidak ada deret yang bisa dilanjutkan otomatis
-                tanpa menebak, dan tabrakan kode pernah terjadi. */}
+                tanpa menebak, dan tabrakan kode pernah terjadi. Contoh varian
+                (K134A) cukup hidup di placeholder. */}
             <p className="text-ink-3 mt-1.5 text-[11px]">
-              Harus unik. Untuk varian baru dari produk yang sudah ada, susulkan
-              huruf pada kode induknya — misalnya <code>K134</code> →{" "}
-              <code>K134A</code>.
+              Harus unik — varian baru: susul kode induk.
             </p>
           </Bidang>
 
@@ -462,9 +459,7 @@ function FormProduk({
                 yang diketik menentukan apakah produk ini bergabung ke kartu
                 yang sudah ada di layar kasir atau berdiri sendiri. */}
             <p className="text-ink-3 mt-1.5 text-[11px]">
-              Nama menentukan pengelompokan varian di layar kasir. &quot;Kopi
-              Susu Panas&quot; dan &quot;Kopi Susu Dingin&quot; menyatu jadi satu
-              kartu; salah satu huruf berbeda dan keduanya jadi kartu terpisah.
+              Menentukan pengelompokan varian di layar kasir.
             </p>
           </Bidang>
 
@@ -482,13 +477,7 @@ function FormProduk({
               ))}
             </select>
             <p className="text-ink-3 mt-1.5 text-[11px]">
-              {kategoriTerpilih
-                ? kategoriTerpilih.taxable
-                  ? "Kategori ini biasanya objek PBJT."
-                  : "Kategori ini biasanya bukan objek PBJT."
-                : ""}{" "}
-              Hanya saran nilai awal — status pajak produk ini diatur sendiri di
-              bawah.
+              Hanya saran awal — status PBJT diatur di bawah.
             </p>
           </Bidang>
 
@@ -502,8 +491,7 @@ function FormProduk({
               className="border-line focus:border-brand w-full rounded-[10px] border px-3 py-2.5 tabular-nums outline-none"
             />
             <p className="text-ink-3 mt-1.5 text-[11px]">
-              Rupiah bulat. Harga selalu dibaca server saat transaksi dibuat —
-              aplikasi kasir tidak pernah mengirim harga.
+              Rupiah bulat. Harga dibaca server saat transaksi.
             </p>
           </Bidang>
 
@@ -514,12 +502,10 @@ function FormProduk({
               onChange={(e) => setTaxable(e.target.checked)}
               className="accent-brand"
             />
-            Kena PBJT — pajak dipungut saat produk ini terjual
+            Kena PBJT — pajak dipungut saat terjual
           </label>
           <p className="text-ink-3 mt-1.5 mb-4 text-[11px]">
-            Berlaku untuk transaksi berikutnya. Struk dan laporan order yang
-            sudah lewat tidak berubah — pajaknya sudah tercatat di baris item
-            saat itu terjual.
+            Berlaku mulai transaksi berikutnya.
           </p>
 
           <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
@@ -529,7 +515,7 @@ function FormProduk({
               onChange={(e) => setActive(e.target.checked)}
               className="accent-brand"
             />
-            Aktif — tampil di menu aplikasi kasir
+            Aktif — tampil di menu kasir
           </label>
 
           <div className="mt-6 flex justify-end gap-2.5">
