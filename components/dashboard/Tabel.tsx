@@ -2,8 +2,24 @@ import type { ReactNode } from "react";
 
 /** Potongan tabel yang dipakai berulang di tiga halaman laporan. */
 
-export function Gulung({ children, desktop = false }: { children: ReactNode; desktop?: boolean }) {
-  return <div className={`gulung min-w-0 overflow-x-auto ${desktop ? "tabel-desktop hidden md:block" : ""}`}>{children}</div>;
+/**
+ * `cetak` menandai wadah yang HANYA muncul di lembar cetak.
+ *
+ * Media print menilai lebar dari KERTAS (A4 ± 794px), bukan jendela, sehingga
+ * breakpoint `md` (768px) ikut cocok saat mencetak. Konsekuensinya dua arah:
+ * tabel layar yang memakai `hidden md:block` harus diberi `print:hidden`
+ * eksplisit supaya tidak dobel dengan lembar lengkap, dan tabel cetak-saja
+ * tidak boleh bergantung pada `md:block`. Aturan `.tabel-desktop` di print
+ * CSS tetap memaksa tampil sebagai blok saat mencetak, jadi keduanya benar
+ * di atas kertas.
+ */
+export function Gulung({ children, desktop = false, cetak = false }: { children: ReactNode; desktop?: boolean; cetak?: boolean }) {
+  const mode = cetak
+    ? "tabel-desktop hidden print:block"
+    : desktop
+      ? "tabel-desktop hidden md:block"
+      : "";
+  return <div className={`gulung min-w-0 overflow-x-auto ${mode}`}>{children}</div>;
 }
 
 /**
@@ -29,7 +45,7 @@ export function Th({
   return (
     <th
       scope="col"
-      className={`border-line text-ink-3 border-b px-3.5 py-3 text-[11px] font-bold tracking-[0.5px] whitespace-nowrap uppercase ${
+      className={`border-line bg-surface text-ink-2 border-b px-3.5 py-3 text-xs font-medium whitespace-nowrap ${
         num ? "text-right" : "text-left"
       } ${className}`}
     >
