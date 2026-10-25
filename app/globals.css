@@ -64,6 +64,13 @@
 .dashboard-sidebar :is(button, a):focus-visible { outline-color: white; outline-offset: -3px; }
 .dashboard-app input[type="checkbox"] { accent-color: var(--color-brand); }
 .fakta dd { overflow-wrap: anywhere; }
+
+/* Laci rincian laporan — panel samping yang masuk dari kanan. `both` menjaga
+   keadaan akhir bila prefers-reduced-motion memangkas durasinya. */
+.laci-latar { animation: laci-fade 0.18s ease-out both; }
+.laci-panel { animation: laci-masuk 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes laci-fade { from { opacity: 0; } }
+@keyframes laci-masuk { from { transform: translateX(100%); } }
 @media (max-width: 767px) {
   .kpi-grille .kpi-angka { font-size: clamp(14px, 3.9vw, 20px); overflow-wrap: anywhere; }
   .kpi-grille > div { padding: 12px; }

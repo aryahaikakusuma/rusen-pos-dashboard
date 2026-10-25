@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import Grafik, { WARNA } from "@/components/dashboard/Grafik";
 import KontrolPeriode from "@/components/dashboard/KontrolPeriode";
 import { IsiKartu, Kartu, KepalaKartu } from "@/components/dashboard/Kartu";
-import { BarisMobile, DaftarMobile, Fakta, Nilai, Pendapatan, Rincian } from "@/components/dashboard/Ringkasan";
+import { DaftarMobile, Fakta, Nilai, Pendapatan, Rincian } from "@/components/dashboard/Ringkasan";
 import { AreaData, Gagal, SedangMemuat } from "@/components/dashboard/Status";
 import { Gulung, Td, Th } from "@/components/dashboard/Tabel";
 import { Api } from "@/lib/api-klien";
@@ -56,6 +56,33 @@ export default function PenjualanHarianPage() {
 
   const hariAda = baris.filter((b) => b.jumlah_order > 0).length;
   const tertinggi = [...baris].sort((a, b) => b.omzet_kotor - a.omzet_kotor)[0];
+
+  /**
+   * Isi laci rincian: satu tanggal (dari baris mana pun) atau total periode
+   * (dari baris TOTAL). Angkanya DIBACA dari baris `BarisHarian`/total yang
+   * sama dengan tabel — tidak ada satu rupiah pun dihitung ulang di sini.
+   */
+  const [rincian, setRincian] = useState<{
+    judul: string;
+    sub: string;
+    data: Omit<BarisHarian, "tanggal">;
+  } | null>(null);
+
+  function bukaRincianTanggal(b: BarisHarian) {
+    setRincian({
+      judul: `Rincian ${tanggalPendek(b.tanggal)}`,
+      sub: `${namaHari(b.tanggal)} · ${angka(b.jumlah_order)} transaksi`,
+      data: b,
+    });
+  }
+
+  function bukaRincianTotal() {
+    setRincian({
+      judul: `Total ${jumlahHari(periode)} hari`,
+      sub: `${angka(T.jumlah_order)} transaksi`,
+      data: T,
+    });
+  }
 
   /**
    * Kontrol periode berada DI ATAS cabang galat dan pemuat pertama, bukan di
@@ -124,24 +151,100 @@ export default function PenjualanHarianPage() {
           <h3 className="text-ink-3 mb-2.5 text-xs font-bold tracking-[0.8px] uppercase">
             Rekapitulasi per Tanggal
           </h3>
+          {/*
+           * LAYAR — baris ringkas. Kolom "Bukan objek" tidak diberi tempat
+           * sendiri karena penjualan rokok dsb adalah penjualan biasa:
+           * nilainya memang sudah termasuk di Omzet Kotor dan Tertagih
+           * (omzet_kotor = dasar_pbjt + bukan_objek + bebas; tertagih =
+           * omzet_kotor + pbjt). Tidak ada angka yang berubah — hanya
+           * tampilannya. Pemisahannya tetap tersedia: di laci rincian tiap
+           * baris, dan di lembar cetak lengkap di bawah.
+           */}
           <DaftarMobile>
-            {baris.map((b) => <BarisMobile key={b.tanggal} judul={tanggalPendek(b.tanggal)} sub={`${namaHari(b.tanggal)} · ${angka(b.jumlah_order)} transaksi`} nilai={rupiah(b.omzet_bersih)}>
-              <Fakta>
-                <Nilai label="Pendapatan tanpa PBJT">{rupiah(b.omzet_bersih)}</Nilai>
-                <Nilai label="Penerimaan termasuk PBJT">{rupiah(b.tertagih_bersih)}</Nilai>
-                <Nilai label="Penjualan sebelum refund">{rupiah(b.omzet_kotor)}</Nilai>
-                <Nilai label="Tagihan sebelum refund">{rupiah(b.tertagih)}</Nilai>
-                <Nilai label="Dasar PBJT">{rupiah(b.dasar_pbjt)}</Nilai>
-                <Nilai label="PBJT terpungut">{rupiah(b.pbjt)}</Nilai>
-                <Nilai label="Bebas per order">{rupiah(b.omzet_bebas_order)}</Nilai>
-                <Nilai label="Bukan objek pajak">{rupiah(b.omzet_bukan_objek)}</Nilai>
-                <Nilai label="Refund pokok + pajak">{rupiah(b.total_refund)}</Nilai>
-                <Nilai label="PBJT dikembalikan">{rupiah(b.refund_pbjt)}</Nilai>
-                <Nilai label="PBJT bersih">{rupiah(b.pbjt_bersih)}</Nilai>
-              </Fakta>
-            </BarisMobile>)}
+            {baris.map((b) => (
+              <BarisRingkas
+                key={b.tanggal}
+                b={b}
+                onBuka={() => bukaRincianTanggal(b)}
+              />
+            ))}
           </DaftarMobile>
-          <Gulung desktop>
+
+          {/*
+           * LAYAR (tablet ke atas) — enam kolom yang tidak pernah menggulir;
+           * detail lainnya pindah ke laci rincian lewat tombol panah.
+           * print:hidden WAJIB: media print menilai lebar dari kertas
+           * (A4 ± 794px) sehingga breakpoint md ikut cocok saat mencetak,
+           * dan tabel layar ini tidak boleh ikut tercetak.
+           */}
+          <div className="hidden md:block print:hidden">
+            <Gulung>
+              <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
+                <thead>
+                  <tr>
+                    <Th>Tanggal</Th>
+                    <Th num>Order</Th>
+                    <Th num>Omzet Kotor</Th>
+                    <Th num>Refund</Th>
+                    <Th num>Tertagih</Th>
+                    <Th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {baris.map((b) => {
+                    const sepi = b.jumlah_order === 0;
+                    return (
+                      <tr
+                        key={b.tanggal}
+                        className={sepi ? "text-ink-3" : "hover:bg-[#FAFBFB]"}
+                      >
+                        <Td className="whitespace-nowrap">
+                          <b>{tanggalPendek(b.tanggal)}</b>{" "}
+                          <span className="text-ink-3 text-[11px]">
+                            {namaHari(b.tanggal)}
+                          </span>
+                        </Td>
+                        <Td num>{b.jumlah_order || "—"}</Td>
+                        <Td num>{b.omzet_kotor ? rupiah(b.omzet_kotor) : "—"}</Td>
+                        <Td num className={b.total_refund ? "text-danger" : ""}>
+                          {b.total_refund ? rupiah(b.total_refund) : "—"}
+                        </Td>
+                        <Td num>
+                          <b>{b.tertagih ? rupiah(b.tertagih) : "—"}</b>
+                        </Td>
+                        <Td num>
+                          <TombolRincian
+                            onClick={() => bukaRincianTanggal(b)}
+                            label={`rincian ${tanggalPendek(b.tanggal)}`}
+                          />
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-brand-soft text-brand-dark font-extrabold">
+                    <Td className="whitespace-nowrap">TOTAL {jumlahHari(periode)} HARI</Td>
+                    <Td num>{angka(T.jumlah_order)}</Td>
+                    <Td num>{rupiah(T.omzet_kotor)}</Td>
+                    <Td num>{rupiah(T.total_refund)}</Td>
+                    <Td num>{rupiah(T.tertagih)}</Td>
+                    <Td num>
+                      <TombolRincian onClick={bukaRincianTotal} label="rincian total" />
+                    </Td>
+                  </tr>
+                </tfoot>
+              </table>
+            </Gulung>
+          </div>
+
+          {/*
+           * CETAK — lembar laporan tetap memakai tabel lengkap 13 kolom
+           * (DESIGN.md: cetak membuka rincian dan memakai tabel lengkap).
+           * Kertas tidak menggulir, jadi lebarnya aman di atas kertas; di
+           * layar wadah ini tidak pernah muncul.
+           */}
+          <Gulung cetak>
             <table className="w-full border-collapse text-[13px] [&_td]:px-2 [&_th]:px-2">
               <thead>
                 <tr>
@@ -348,6 +451,10 @@ export default function PenjualanHarianPage() {
         <div className="mt-4"><GrafikPeriode baris={baris} /></div>
       </Rincian>
       </AreaData>
+
+      {rincian ? (
+        <LaciRincian isi={rincian} onTutup={() => setRincian(null)} />
+      ) : null}
     </>
   );
 }
@@ -605,5 +712,201 @@ function Kotak({
         ))}
       </dl>
     </div>
+  );
+}
+
+/* ------------------------------------------------- baris ringkas dan laci */
+
+/**
+ * Baris ringkas satu tanggal di HP: tiga angka utama dan panah ke laci.
+ * Menggantikan kartu `<details>` yang menebar sebelas nilai per tanggal —
+ * semuanya masih ada, hanya pindah ke `LaciRincian` yang dibuka on demand.
+ */
+function BarisRingkas({ b, onBuka }: { b: BarisHarian; onBuka: () => void }) {
+  const sepi = b.jumlah_order === 0;
+  return (
+    <div className={`px-4 py-3.5 ${sepi ? "text-ink-3" : ""}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold">{tanggalPendek(b.tanggal)}</p>
+          <p className="text-ink-3 mt-0.5 text-xs">
+            {namaHari(b.tanggal)} · {angka(b.jumlah_order)} transaksi
+          </p>
+        </div>
+        <TombolRincian onClick={onBuka} label={`rincian ${tanggalPendek(b.tanggal)}`} />
+      </div>
+      <dl className="mt-2.5 space-y-1.5">
+        <BarisNilai label="Omzet Kotor" nilai={b.omzet_kotor ? rupiah(b.omzet_kotor) : "—"} />
+        <BarisNilai
+          label="Refund"
+          nilai={b.total_refund ? rupiah(b.total_refund) : "—"}
+          danger={b.total_refund > 0}
+        />
+        <BarisNilai label="Tertagih" nilai={b.tertagih ? rupiah(b.tertagih) : "—"} tebal />
+      </dl>
+    </div>
+  );
+}
+
+function BarisNilai({
+  label,
+  nilai,
+  tebal = false,
+  danger = false,
+}: {
+  label: string;
+  nilai: string;
+  tebal?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-ink-3 text-xs">{label}</dt>
+      <dd
+        className={`text-sm tabular-nums ${tebal ? "font-bold" : "font-semibold"} ${
+          danger ? "text-danger" : ""
+        }`}
+      >
+        {nilai}
+      </dd>
+    </div>
+  );
+}
+
+/** Panah pembuka laci; min-height 44px datang dari aturan sentuh global. */
+function TombolRincian({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Buka ${label}`}
+      className="border-line text-ink-2 hover:border-brand hover:text-brand-dark shrink-0 cursor-pointer rounded-lg border bg-white px-3 text-lg font-bold leading-none"
+    >
+      ›
+    </button>
+  );
+}
+
+/**
+ * Panel samping rincian — isi satu tanggal atau total periode.
+ *
+ * Tabel dua kolom label|nilai, satu baris per nilai, dengan gaya sel yang
+ * sama dengan "Rekonsiliasi Penerimaan". Angka nol tetap ditulis "Rp 0":
+ * ini tampilan rincian penuh, bukan ringkasan. Panel ini afordansi layar
+ * semata (`no-print`) — lembar cetak membawa seluruh kolomnya sendiri.
+ */
+function LaciRincian({
+  isi,
+  onTutup,
+}: {
+  isi: { judul: string; sub: string; data: Omit<BarisHarian, "tanggal"> };
+  onTutup: () => void;
+}) {
+  const d = isi.data;
+  return (
+    <div className="no-print fixed inset-0 z-100">
+      <button
+        type="button"
+        aria-label="Tutup rincian"
+        onClick={onTutup}
+        className="laci-latar absolute inset-0 cursor-default bg-[rgba(16,24,40,.45)]"
+      />
+      <div
+        role="dialog"
+        aria-label={isi.judul}
+        className="laci-panel absolute top-0 right-0 flex h-full w-full max-w-[420px] flex-col rounded-l-2xl bg-white shadow-[0_24px_64px_rgba(0,0,0,.2)]"
+      >
+        <header className="border-line flex items-start justify-between gap-3 border-b px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-[17px] font-bold">{isi.judul}</h3>
+            <p className="text-ink-3 mt-0.5 text-xs">{isi.sub}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onTutup}
+            aria-label="Tutup"
+            className="text-ink-3 hover:text-ink cursor-pointer text-2xl leading-none"
+          >
+            ×
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
+          <table className="w-full border-collapse">
+            <tbody>
+              <KelompokLaci label="Omzet" />
+              <BarisLaci label="Omzet Kotor" nilai={rupiah(d.omzet_kotor)} />
+              <BarisLaci label="Dasar PBJT" nilai={rupiah(d.dasar_pbjt)} />
+              <BarisLaci label="PBJT terpungut" nilai={rupiah(d.pbjt)} />
+              <BarisLaci
+                label="Bebas per order"
+                nilai={rupiah(d.omzet_bebas_order)}
+                warna={d.omzet_bebas_order ? "warn" : undefined}
+              />
+              <BarisLaci
+                label="Bukan objek pajak (rokok dsb)"
+                nilai={rupiah(d.omzet_bukan_objek)}
+              />
+              <KelompokLaci label="Refund dan tertagih" />
+              <BarisLaci label="Tertagih" nilai={rupiah(d.tertagih)} />
+              <BarisLaci
+                label="Refund pokok + pajak"
+                nilai={d.total_refund ? `-${rupiah(d.total_refund)}` : rupiah(0)}
+                warna={d.total_refund ? "danger" : undefined}
+              />
+              <KelompokLaci label="Setelah refund" />
+              <BarisLaci label="Pendapatan bersih tanpa PBJT" nilai={rupiah(d.omzet_bersih)} />
+              <BarisLaci
+                label="Penerimaan bersih termasuk PBJT"
+                nilai={rupiah(d.tertagih_bersih)}
+              />
+              <BarisLaci label="PBJT dikembalikan" nilai={rupiah(d.refund_pbjt)} />
+              <BarisLaci label="PBJT bersih" nilai={rupiah(d.pbjt_bersih)} tonal />
+            </tbody>
+          </table>
+          <p className="text-ink-3 mt-4 text-[11px] leading-relaxed">
+            Omzet Kotor dan Tertagih sudah mencakup penjualan bukan objek
+            pajak (rokok dsb) sebagai penjualan biasa — pemisahannya hanya
+            untuk pelaporan PBJT.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KelompokLaci({ label }: { label: string }) {
+  return (
+    <tr>
+      <td
+        colSpan={2}
+        className="text-ink-3 pt-4 pb-1.5 text-[10px] font-bold tracking-[0.8px] uppercase"
+      >
+        {label}
+      </td>
+    </tr>
+  );
+}
+
+function BarisLaci({
+  label,
+  nilai,
+  warna,
+  tonal = false,
+}: {
+  label: string;
+  nilai: string;
+  warna?: "danger" | "warn";
+  tonal?: boolean;
+}) {
+  return (
+    <tr className={tonal ? "bg-brand-soft" : undefined}>
+      <Td>{label}</Td>
+      <Td
+        num
+        className={warna === "danger" ? "text-danger" : warna === "warn" ? "text-warn" : ""}
+      >
+        <b>{nilai}</b>
+      </Td>
+    </tr>
   );
 }
