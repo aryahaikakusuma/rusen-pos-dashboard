@@ -2345,6 +2345,39 @@ order lunas). Frontend diterbitkan lewat push `dashboard-web:main` ke remote
 `web`, yang memicu deploy produksi Vercel. Tidak ada seed atau data order yang
 ditulis dalam verifikasi hosted.
 
+## Dashboard coklat logo dan warna perubahan — 17–18 November 2026 (web only)
+
+Heika menyetujui pratinjau HTML yang memakai salinan komponen/CSS asli, lalu
+meminta implementasi di branch review, bukan main. Token navigasi/aksi dan seri
+grafik utama menjadi #8B4E27, hover #65381D, terpilih #F6EDE5. Sidebar 260px,
+Inter, layout, breakpoint, dan seri pembanding tetap. Login memakai keluarga
+coklat gelap; fokus keyboard khusus login memakai warna krem agar tidak hilang
+terhadap latar gelap. Mobile, API, SQL, auth, dan definisi uang tidak diubah.
+
+`Perubahan` menyatukan presentasi indikator: pendapatan naik hijau/turun merah,
+refund naik merah/turun hijau. Nominal refund tetap merah sebagai uang keluar,
+berbeda dari warna perubahannya. Nol netral dan bertuliskan “Tetap”; tidak ada
+persentase bila baseline nol/tidak tersedia. `Pendapatan` tetap menolak baseline
+negatif seperti sebelumnya. Nilai bersih negatif merah. Perbandingan refund
+memakai data sebelumnya yang sudah tersedia, inline di footer ringkasan; tidak
+menambah kartu, query, atau perhitungan transaksi.
+
+Gotcha: nol dulu dianggap kenaikan oleh `>= 0`, dan refund turun mudah keliru
+merah bila tanda dipakai tanpa arti metrik. Gate `npm run periksa:warna` merender
+komponen TSX asli dengan ReactDOMServer: 18 kasus lulus, termasuk baseline nol,
+refund habis, nilai negatif, KPI terbalik, dan nonfinite. Typecheck, lint web,
+dan production build lulus. Lint keseluruhan repo masih gagal pada mobile dan
+`check-data.cjs` lama; bukan perubahan branch ini.
+
+Visual localhost diperiksa pada 1440px dan 390px menggunakan fixture hanya di
+browser, karena .env.local checkout utama menunjuk Supabase localhost:54321 yang
+tidak dapat dijangkau. Tidak ada overflow; sidebar desktop 260px; DOM memastikan
+warna hijau/merah/coklat sesuai. Gate laporan/XLSX belum lulus di lingkungan ini:
+setelah dev server dimulai ulang untuk memuat env, sesi sah tetapi RPC gagal
+`fetch failed`. Tidak mengganti URL ke hosted, menjalankan migration, atau
+mengubah guard untuk menutupi kegagalan lingkungan. Konfigurasi lokal diabaikan
+Git; branch review `feat/dashboard-coklat-rusen`, tidak merge/deploy produksi.
+
 ## Step 8 — Device and store builds
 
 `preview` for installable tablet tests, `production` for the final sideloaded build.

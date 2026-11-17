@@ -49,9 +49,9 @@ Chart.defaults.font.family =
 Chart.defaults.color = "#606A68";
 
 export const WARNA = {
-  brand: "#2563EB",
-  brandGaris: "#2563EB",
-  brandLembut: "rgba(37,99,235,.08)",
+  brand: "#8B4E27",
+  brandGaris: "#8B4E27",
+  brandLembut: "rgba(139,78,39,.08)",
   abu: "#77807E",
   abuTua: "#77807E",
   kuning: "#C77700",
