@@ -7,13 +7,13 @@
   --font-sans: var(--ff-poppins), system-ui, sans-serif;
   --font-inter: var(--ff-inter), system-ui, sans-serif;
 
-  /* Primary action blue — reserved for the one primary button per screen */
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-900: #1e3a8a;
+  /* Coklat logo Rusen — navigasi dan aksi web, bukan warna naik/turun. */
+  --color-primary-50: #f6ede5;
+  --color-primary-100: #eddbc9;
+  --color-primary-500: #a4663d;
+  --color-primary-600: #8b4e27;
+  --color-primary-700: #65381d;
+  --color-primary-900: #422613;
 
   /* Order status, per DESIGN.md */
   --color-status-pending: #f59e0b;
@@ -23,14 +23,14 @@
   --color-status-void: #7f1d1d;
   --color-status-void-light: #fee2e2;
 
-  /* Login surface */
-  --color-login-bg: #0f172a;
-  --color-login-primary: #1e3a5f;
-  --color-login-accent: #059669;
-  --color-login-muted: #10192e;
+  /* Login web memakai keluarga coklat yang sama, tanpa mengubah layout. */
+  --color-login-bg: #211710;
+  --color-login-primary: #65381d;
+  --color-login-accent: #a4663d;
+  --color-login-muted: #2b1e16;
 
-  /* Satu palet biru untuk navigasi, aksi, tab, filter, dan fokus dashboard.
-     Layout Majoo dipertahankan; warna memakai identitas primer Rusen. */
+  /* Satu palet coklat untuk navigasi, aksi, tab, filter, dan fokus dashboard.
+     Layout Majoo dipertahankan; good/danger/warn tetap semantik. */
   --color-brand: var(--color-primary-600);
   --color-brand-dark: var(--color-primary-700);
   --color-brand-soft: var(--color-primary-50);
@@ -63,6 +63,8 @@
 .dashboard-app :is(button, a, input, select, summary, [role="tabpanel"]):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .dashboard-sidebar :is(button, a):focus-visible { outline-color: white; outline-offset: -3px; }
 .dashboard-app input[type="checkbox"] { accent-color: var(--color-brand); }
+/* Coklat cukup kontras di dashboard terang, tetapi tidak di login gelap. */
+.bg-login-bg :is(button, a, input):focus-visible { outline-color: var(--color-primary-100); }
 .fakta dd { overflow-wrap: anywhere; }
 
 /* Laci rincian laporan — panel samping yang masuk dari kanan. `both` menjaga

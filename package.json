@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "periksa:laporan": "node scripts/periksa-laporan.mjs",
-    "periksa:pendapatan": "node scripts/periksa-pendapatan.mjs"
+    "periksa:pendapatan": "node scripts/periksa-pendapatan.mjs",
+    "periksa:warna": "node scripts/periksa-warna-dashboard.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

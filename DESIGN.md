@@ -10,26 +10,34 @@ Primary font: Poppins for the cashier app. The manager web dashboard uses the ex
 
 ## Colors
 
-- Primary accent color: blue (not green like Majoo). Used only for primary actions — Pay/Confirm Payment buttons, important status badges.
+- Cashier mobile primary accent: blue (not green like Majoo). Used only for primary actions — Pay/Confirm Payment buttons, important status badges. The web dashboard uses the brown palette below.
 - Selected category/menu status in the sidebar uses a dark neutral color (not blue), so primary action buttons do not "compete" visually with the selected status.
 - Order status uses semantic colors: awaiting payment = warning (yellow/amber), paid = success (dark green/teal), void = neutral/muted red.
 - Clean background, white/light neutral, without excessive gradients or shadows. Flat surfaces.
 
-### Dashboard manajer (web) — biru Rusen, layout Majoo, 1 Oktober 2026
+### Dashboard manajer (web) — coklat logo Rusen, 17 November 2026
 
-Heika menyetujui perapian mengikuti audit langsung Majoo: sidebar berwarna, konten
-putih/abu-abu, ikon garis, statistik ringkas, dan format tabel yang seragam.
-Setelah melihat versi teal, Heika memilih kembali biru Rusen dengan penerapan
-merata seperti versi teal. Layout, Inter, ikon garis, dan perbaikan HP tetap.
-Navigasi dan aksi utama memakai primary-600 (#2563EB), menu aktif/hover
-primary-700 (#1D4ED8), dan permukaan terpilih primary-50 (#EFF6FF).
-Tab, kalender, checkbox, tombol unduh, dan fokus keyboard memakai token brand
-yang sama. Aturan warna kasir mobile tetap seperti di atas.
+Heika menyetujui pratinjau HTML dengan layout dashboard yang sama, mengganti biru
+menjadi coklat hangat dari logo toko. Sidebar 260px, Inter, ikon garis, statistik,
+tabel, breakpoint HP, dan permukaan putih/abu-abu tetap. Navigasi dan aksi utama
+memakai primary-600 (#8B4E27), menu aktif/hover primary-700 (#65381D), serta
+permukaan terpilih primary-50 (#F6EDE5). Tab, kalender, checkbox, tombol unduh,
+dan fokus keyboard memakai token brand yang sama. Login memakai keluarga
+coklat gelap. Aturan warna kasir mobile tidak berubah.
 
-Warna seri grafik tetap berbeda: biru untuk penjualan, ungu untuk tagihan,
+Warna seri grafik tetap berbeda: coklat untuk penjualan, ungu untuk tagihan,
 abu-abu untuk periode pembanding, amber dan merah sesuai arti datanya.
 Angka uang memakai digit tabular; statistik sekunder berbagi satu permukaan
 dengan pembatas tipis. Kontrol sentuh tetap minimal 44px.
+
+Coklat menandai brand/aksi, bukan baik-buruknya angka. Perubahan pendapatan naik
+hijau, turun merah; perubahan refund naik merah, turun hijau. Nominal refund
+sendiri tetap merah bila ada, karena merupakan uang keluar. Nilai bersih negatif
+juga merah. Perubahan tepat nol netral dan bertuliskan “Tetap”, bukan “Naik”.
+Label “Naik/Turun/Tetap” selalu menyertai warna. Pembanding tidak tersedia atau
+nol tidak menghasilkan persentase; pembanding pendapatan negatif juga tidak
+dipaksakan menjadi persentase. Tidak ada warna sukses untuk selisih kas positif:
+selisih lebih tetap peringatan, sesuai arti rekonsiliasi.
 
 Perapian ini hanya presentasi. API, RPC, definisi pendapatan, refund, dan basis
 tanggal tidak berubah; tidak ada migrasi atau perubahan transaksi. Label

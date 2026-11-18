@@ -1,6 +1,6 @@
 import { Children, type CSSProperties, type ReactNode } from "react";
 
-import { persen } from "@/lib/format";
+import Perubahan from "./Perubahan";
 
 /** Permukaan dasar seluruh dashboard: putih dengan satu garis tipis. */
 export function Kartu({
@@ -61,29 +61,22 @@ export function Kpi({
   nilai,
   kaki,
   delta: perubahan,
+  turunLebihBaik = false,
   kecil = false,
 }: {
   label: string;
   nilai: string;
   kaki?: string;
   delta?: number | null;
+  /** Refund/biaya membaik saat turun; jangan menebaknya dari label. */
+  turunLebihBaik?: boolean;
   kecil?: boolean;
 }) {
   return (
     <Kartu className="px-[18px] py-4">
       <div className="text-ink-3 flex flex-wrap items-center gap-1.5 text-xs font-medium">
         <span>{label}</span>
-        {perubahan !== undefined && perubahan !== null ? (
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-              perubahan >= 0
-                ? "bg-good-soft text-good"
-                : "bg-danger-soft text-danger"
-            }`}
-          >
-            {perubahan >= 0 ? "▲" : "▼"} {persen(Math.abs(perubahan))}
-          </span>
-        ) : null}
+        <Perubahan nilai={perubahan} turunLebihBaik={turunLebihBaik} badge />
       </div>
       <p
         className={`text-ink mt-1.5 mb-1 font-extrabold tracking-[-0.7px] ${

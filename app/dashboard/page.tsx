@@ -289,7 +289,7 @@ export default function DashboardPage() {
             <Fakta>
               <Nilai label="Tunai sebelum refund">{rupiah(T.tertagih_tunai)}</Nilai>
               <Nilai label="Non-tunai sebelum refund">{rupiah(T.tertagih_non_tunai)}</Nilai>
-              <Nilai label="Refund periode ini">{rupiah(T.total_refund)}</Nilai>
+              <Nilai label="Refund periode ini"><span className={T.total_refund > 0 ? "text-danger" : undefined}>{rupiah(T.total_refund)}</span></Nilai>
               <Nilai label="Penerimaan bersih termasuk PBJT">{rupiah(T.tertagih_bersih)}</Nilai>
             </Fakta>
           </IsiKartu>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
           <IsiKartu>
             <Fakta>
               <Nilai label="PBJT terpungut">{rupiah(T.pbjt)}</Nilai>
-              <Nilai label="PBJT dikembalikan">{rupiah(T.refund_pbjt)}</Nilai>
+              <Nilai label="PBJT dikembalikan"><span className={T.refund_pbjt > 0 ? "text-danger" : undefined}>{rupiah(T.refund_pbjt)}</span></Nilai>
               <Nilai label="PBJT bersih setelah refund">{rupiah(T.pbjt_bersih)}</Nilai>
               <Nilai label="Dasar pengenaan sebelum refund">{rupiah(T.dasar_pbjt)}</Nilai>
               <Nilai label="Dibebaskan per order">{rupiah(T.omzet_bebas_order)}</Nilai>
